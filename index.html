@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bluesky Feed V17.0 RISE</title>
+    <title>Bluesky Feed V18.0 RISE</title>
     <style>
-        /* Ver 17.0: Close Button on Image & Smaller Modal */
+        /* Ver 18.0: PC Image 50% Width & Previous Fixes */
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-main: #0b0f14; --text-sub: #42576c; --accent-blue: #0085ff; --border-color: #e1e3e5; --hover-bg: #f5f7f9; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; color: var(--text-main); }
         /* body { background-color: transparent; padding: 10px 0; } */
@@ -22,8 +22,23 @@
         .text { font-size: 15px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 10px; }
         .text a { color: var(--accent-blue); text-decoration: none; } .text a:hover { text-decoration: underline; }
         
-        /* タイムライン画像: 高さ自動、最大200px */
-        .post-image { margin-top: 8px; border-radius: 6px; width: 100%; height: auto; max-height: 200px; object-fit: cover; border: 1px solid var(--border-color); cursor: zoom-in; display: block; }
+        /* ★画像スタイルの調整 */
+        .post-image {
+            margin-top: 8px; border-radius: 6px;
+            width: 100%;            /* スマホ: 横幅いっぱい */
+            height: auto; 
+            max-height: 200px; 
+            object-fit: cover; 
+            border: 1px solid var(--border-color); cursor: zoom-in; display: block;
+        }
+
+        /* ★PC（画面幅768px以上）の場合の特別ルール */
+        @media (min-width: 768px) {
+            .post-image {
+                width: 50%;         /* PC: 横幅を半分にする */
+                max-height: 150px;  /* 高さも少し抑える */
+            }
+        }
         
         .embed-card { margin-top: 10px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; text-decoration: none; color: inherit; display: block; transition: background-color 0.2s; background-color: var(--card-bg); min-height: 80px; }
         .embed-card:hover { background-color: var(--hover-bg); }
@@ -39,26 +54,21 @@
         .quote-name { font-weight: 700; font-size: 13px; } .quote-handle { font-size: 13px; color: var(--text-sub); } .quote-text { font-size: 14px; }
         .loading { text-align: center; color: var(--text-sub); margin-top: 20px; }
         
-        /* ★モーダル改善 */
+        /* モーダル */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s; }
         .modal.show { display: flex; opacity: 1; }
-        
-        /* 画像と×ボタンをまとめるラッパー */
-        .modal-wrapper { position: relative; max-width: 95%; max-height: 60vh; /* ★高さを60%に制限 */ }
-        
+        .modal-wrapper { position: relative; max-width: 95%; max-height: 60vh; }
         .modal-content {
             width: auto; height: auto;
-            max-width: 100%; max-height: 60vh; /* ★ここも60%に */
+            max-width: 100%; max-height: 60vh;
             object-fit: contain; border-radius: 4px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.5);
             transform: scale(0.95); transition: transform 0.3s;
-            display: block; /* imgタグの隙間対策 */
+            display: block;
         }
         .modal.show .modal-content { transform: scale(1); }
-        
-        /* ★閉じるボタン: 画像の右上に配置 */
         .close-btn {
-            position: absolute; top: -20px; right: -20px; /* 画像の外側右上 */
+            position: absolute; top: -20px; right: -20px;
             color: #fff; background: rgba(0,0,0,0.6);
             width: 40px; height: 40px; border-radius: 50%;
             text-align: center; line-height: 40px; font-size: 28px; font-weight: bold;
@@ -70,7 +80,7 @@
 </head>
 <body>
 <div class="container" id="feed-container">
-    <div class="version-tag">Ver 17.0 (This sites is created by RISE)</div>
+    <div class="version-tag">Ver 18.0 (This sites is created by RISE)</div>
     <div class="loading">読み込み中...</div>
 </div>
 <div id="image-modal" class="modal">
@@ -102,51 +112,30 @@
         const decoder = new TextDecoder();
         const textBytes = encoder.encode(text);
         const facets = record.facets.sort((a, b) => a.index.byteStart - b.index.byteStart);
-        
-        let html = '';
-        let lastByteIndex = 0;
+        let html = ''; let lastByteIndex = 0;
 
         facets.forEach(facet => {
-            const start = facet.index.byteStart;
-            const end = facet.index.byteEnd;
+            const start = facet.index.byteStart; const end = facet.index.byteEnd;
             if (start > lastByteIndex) html += escapeHtml(decoder.decode(textBytes.slice(lastByteIndex, start)));
-            
             const linkText = escapeHtml(decoder.decode(textBytes.slice(start, end)));
-            let url = '#';
-            let isLink = false;
-            
+            let url = '#'; let isLink = false;
             if (facet.features) {
                 const linkFeature = facet.features.find(f => f.$type === 'app.bsky.richtext.facet#link');
-                if (linkFeature) {
-                    url = linkFeature.uri;
-                    isLink = true;
-                }
+                if (linkFeature) { url = linkFeature.uri; isLink = true; }
             }
-
             if (isLink) {
                 const ytId = extractYoutubeId(url);
                 if (ytId) url = `https://www.youtube.com/watch?v=${ytId}`;
                 html += `<a href="${url}" target="_blank" rel="noopener noreferrer">${linkText}</a>`;
-            } else {
-                html += linkText;
-            }
+            } else { html += linkText; }
             lastByteIndex = end;
         });
-
         if (lastByteIndex < textBytes.length) html += escapeHtml(decoder.decode(textBytes.slice(lastByteIndex)));
         return html;
     }
 
     function generateYoutubeCardHtml(videoId) {
-        return `
-            <a href="https://www.youtube.com/watch?v=${videoId}" target="_blank" class="embed-card">
-                <img src="https://img.youtube.com/vi/${videoId}/hqdefault.jpg" class="embed-thumb" alt="YouTube Thumbnail">
-                <div class="embed-info">
-                    <div class="embed-title">YouTube Video</div>
-                    <div class="embed-desc">Click to watch on YouTube</div>
-                    <div class="embed-host">youtube.com</div>
-                </div>
-            </a>`;
+        return `<a href="https://www.youtube.com/watch?v=${videoId}" target="_blank" class="embed-card"><img src="https://img.youtube.com/vi/${videoId}/hqdefault.jpg" class="embed-thumb" alt="YouTube Thumbnail"><div class="embed-info"><div class="embed-title">YouTube Video</div><div class="embed-desc">Click to watch on YouTube</div><div class="embed-host">youtube.com</div></div></a>`;
     }
 
     async function fetchOgData(url, targetElementId) {
@@ -158,20 +147,16 @@
             if (!target || json.status !== 'success') { if(target) target.style.display = 'none'; return; }
             const data = json.data;
             const thumbHtml = data.image ? `<img src="${data.image.url}" class="embed-thumb" alt="thumbnail">` : '';
-            const title = data.title || url;
-            const host = new URL(url).hostname;
+            const title = data.title || url; const host = new URL(url).hostname;
             target.innerHTML = `<a href="${url}" target="_blank" class="embed-card" style="margin-top:10px;">${thumbHtml}<div class="embed-info"><div class="embed-title">${title}</div><div class="embed-desc">${data.description||''}</div><div class="embed-host">${host}</div></div></a>`;
             target.className = '';
-        } catch (e) {
-            if(target) target.style.display = 'none';
-        }
+        } catch (e) { if(target) target.style.display = 'none'; }
     }
 
     function renderEmbed(embed) {
         if (!embed) return null;
         if (embed.$type === 'app.bsky.embed.external') {
-            const ext = embed.external;
-            const videoId = extractYoutubeId(ext.uri);
+            const ext = embed.external; const videoId = extractYoutubeId(ext.uri);
             if (videoId) return generateYoutubeCardHtml(videoId);
             const thumb = ext.thumb ? `<img src="${ext.thumb}" class="embed-thumb">` : '';
             let hostname = 'link'; try { hostname = new URL(ext.uri).hostname; } catch(e) {}
@@ -220,12 +205,8 @@
                                 for (const feature of facet.features) {
                                     if (feature.$type === 'app.bsky.richtext.facet#link' && feature.uri) {
                                         const videoId = extractYoutubeId(feature.uri);
-                                        if (videoId) {
-                                            embedHtml = generateYoutubeCardHtml(videoId);
-                                            break;
-                                        } else if (!extraCardUrl) {
-                                            extraCardUrl = feature.uri;
-                                        }
+                                        if (videoId) { embedHtml = generateYoutubeCardHtml(videoId); break; }
+                                        else if (!extraCardUrl) { extraCardUrl = feature.uri; }
                                     }
                                 }
                             }
