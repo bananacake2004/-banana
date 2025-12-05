@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bluesky Feed V8</title>
+    <title>Bluesky Feed V9 RISE</title>
     <style>
-        /* Ver 8.0 Final Code */
+        /* Ver 9.0 Final: Compact Image & Sure YouTube */
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-main: #0b0f14; --text-sub: #42576c; --accent-blue: #0085ff; --border-color: #e1e3e5; --hover-bg: #f5f7f9; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; color: var(--text-main); }
+        /* Google Sitesで背景を透明にする場合はコメントを外す */
         /* body { background-color: transparent; padding: 10px 0; } */
         
         .container { max-width: 600px; margin: 0 auto; position: relative; }
@@ -15,19 +16,18 @@
         .post-card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; margin-bottom: 12px; display: flex; gap: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background-color: #eee; flex-shrink: 0; }
         .content { flex: 1; min-width: 0; }
-        
         .header { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; flex-wrap: wrap; }
         .display-name { font-weight: 700; font-size: 15px; color: var(--text-main); text-decoration: none; }
         .handle { color: var(--text-sub); font-size: 14px; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .time { color: var(--text-sub); font-size: 14px; white-space: nowrap; }
-        
         .text { font-size: 15px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 10px; }
         .text a { color: var(--accent-blue); text-decoration: none; } .text a:hover { text-decoration: underline; }
         
-        /* 画像：コンパクト表示（高さ制限） */
+        /* 画像：コンパクト（高さ180px） */
         .post-image {
-            margin-top: 8px; border-radius: 8px; width: 100%; height: 220px; object-fit: cover;
-            border: 1px solid var(--border-color); cursor: zoom-in; display: block;
+            margin-top: 8px; border-radius: 8px; width: 100%;
+            height: 180px;
+            object-fit: cover; border: 1px solid var(--border-color); cursor: zoom-in; display: block;
         }
         
         /* リンクカード */
@@ -39,14 +39,11 @@
         .embed-desc { font-size: 13px; color: var(--text-sub); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-bottom: 4px; }
         .embed-host { font-size: 12px; color: var(--text-sub); }
         
-        /* 読み込み中のプレースホルダー */
         .card-loading { padding: 12px; font-size: 12px; color: #999; text-align: center; border: 1px dashed #ddd; border-radius: 8px; margin-top: 10px; }
-
         .quote-card { margin-top: 10px; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; background-color: var(--card-bg); }
         .quote-header { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
         .quote-avatar { width: 20px; height: 20px; border-radius: 50%; }
         .quote-name { font-weight: 700; font-size: 13px; } .quote-handle { font-size: 13px; color: var(--text-sub); } .quote-text { font-size: 14px; }
-        
         .loading { text-align: center; color: var(--text-sub); margin-top: 20px; }
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); align-items: center; justify-content: center; opacity: 0; transition: opacity 0.4s; backdrop-filter: blur(4px); }
         .modal.show { display: flex; opacity: 1; }
@@ -57,7 +54,7 @@
 </head>
 <body>
 <div class="container" id="feed-container">
-    <div class="version-tag">Ver 8.0 (Universal Cards)</div>
+    <div class="version-tag">Ver 9.0 (This sites is created by RISE)</div>
     <div class="loading">読み込み中...</div>
 </div>
 <div id="image-modal" class="modal"><span class="close-btn">&times;</span><img class="modal-content" id="expanded-image"></div>
@@ -70,53 +67,43 @@
         const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         const urlRegex = /((?:https?:\/\/|www\.|youtu\.be\/)[^\s　]+?)(?=[.,;!?]?(?:\s|　|$))/g;
         return escaped.replace(urlRegex, function(url) {
-            let href = url;
-            if (!url.startsWith('http')) { href = 'https://' + url; }
+            let href = url; if (!url.startsWith('http')) { href = 'https://' + url; }
             return `<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
         });
     }
 
-    // 汎用カード生成（外部API使用）
+    // YouTube専用カード生成
+    function createYoutubeCard(text) {
+        const ytRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/;
+        const match = text.match(ytRegex);
+        if (match && match[1]) {
+            const videoId = match[1];
+            return `<a href="https://www.youtube.com/watch?v=${videoId}" target="_blank" class="embed-card"><img src="https://img.youtube.com/vi/${videoId}/hqdefault.jpg" class="embed-thumb" alt="YouTube Thumbnail"><div class="embed-info"><div class="embed-title">YouTube Video</div><div class="embed-desc">Click to watch on YouTube</div><div class="embed-host">youtube.com</div></div></a>`;
+        }
+        return '';
+    }
+
+    // その他のURL用
     async function fetchOgData(url, targetElementId) {
         try {
-            // microlink.ioのAPIを使ってメタデータを取得
-            const apiUrl = `https://api.microlink.io?url=${encodeURIComponent(url)}`;
-            const res = await fetch(apiUrl);
+            const res = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}`);
             const json = await res.json();
-            const data = json.data;
-            
             const target = document.getElementById(targetElementId);
-            if (!target || json.status !== 'success') {
-                if(target) target.style.display = 'none'; // 失敗したら消す
-                return;
-            }
-
+            if (!target || json.status !== 'success') { if(target) target.style.display = 'none'; return; }
+            const data = json.data;
             const thumbHtml = data.image ? `<img src="${data.image.url}" class="embed-thumb" alt="thumbnail">` : '';
-            const desc = data.description || '';
             const title = data.title || url;
             const host = new URL(url).hostname;
-
-            target.innerHTML = `
-                <a href="${url}" target="_blank" class="embed-card" style="margin-top:0;">
-                    ${thumbHtml}
-                    <div class="embed-info">
-                        <div class="embed-title">${title}</div>
-                        <div class="embed-desc">${desc}</div>
-                        <div class="embed-host">${host}</div>
-                    </div>
-                </a>
-            `;
-            target.className = ''; // loadingクラスを消す
-
+            target.innerHTML = `<a href="${url}" target="_blank" class="embed-card" style="margin-top:0;">${thumbHtml}<div class="embed-info"><div class="embed-title">${title}</div><div class="embed-desc">${data.description||''}</div><div class="embed-host">${host}</div></div></a>`;
+            target.className = '';
         } catch (e) {
             console.error('Card fetch failed', e);
-            const t = document.getElementById(targetElementId);
-            if(t) t.style.display = 'none';
+            const t = document.getElementById(targetElementId); if(t) t.style.display = 'none';
         }
     }
 
     function renderEmbed(embed) {
-        if (!embed) return null; // 何もない場合はnullを返す
+        if (!embed) return null;
         if (embed.$type === 'app.bsky.embed.external') {
             const ext = embed.external;
             const thumb = ext.thumb ? `<img src="${ext.thumb}" class="embed-thumb">` : '';
@@ -124,20 +111,14 @@
             return `<a href="${ext.uri}" target="_blank" class="embed-card">${thumb}<div class="embed-info"><div class="embed-title">${ext.title||'No Title'}</div><div class="embed-desc">${ext.description||''}</div><div class="embed-host">${hostname}</div></div></a>`;
         }
         if (embed.$type === 'app.bsky.embed.record') {
-            const rec = embed.record;
-            if (!rec.value) return '';
+            const rec = embed.record; if (!rec.value) return '';
             const author = rec.author || {displayName:'Unknown', handle:'unknown'};
             const postId = rec.uri.split('/').pop();
             return `<a href="https://bsky.app/profile/${author.handle}/post/${postId}" target="_blank" style="text-decoration:none;"><div class="quote-card"><div class="quote-header"><img src="${author.avatar||''}" class="quote-avatar"><span class="quote-name">${author.displayName||author.handle}</span><span class="quote-handle">@${author.handle}</span></div><div class="quote-text">${rec.value.text||''}</div></div></a>`;
         }
         if (embed.$type === 'app.bsky.embed.recordWithMedia') {
-            let media = '';
-            if(embed.media.images) embed.media.images.forEach(img => {
-                media += `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="post-image" alt="post image">`;
-            });
-            // 引用部分は再帰呼び出し
-            const recHtml = renderEmbed(embed.record);
-            return media + (recHtml || '');
+            let media = ''; if(embed.media.images) embed.media.images.forEach(img => { media += `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="post-image" alt="post image">`; });
+            return media + (renderEmbed(embed.record) || '');
         }
         return null;
     }
@@ -148,87 +129,48 @@
             const response = await fetch(API_URL);
             if (!response.ok) throw new Error('データ取得に失敗しました');
             const data = await response.json();
-            
             const versionTag = container.querySelector('.version-tag');
-            container.innerHTML = '';
-            if(versionTag) container.appendChild(versionTag);
+            container.innerHTML = ''; if(versionTag) container.appendChild(versionTag);
 
             data.feed.forEach((item, index) => {
-                const post = item.post;
-                const author = post.author;
-                const record = post.record;
+                const post = item.post; const author = post.author; const record = post.record;
                 const date = new Date(record.createdAt);
                 const timeStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
-                
-                const card = document.createElement('div');
-                card.className = 'post-card';
+                const card = document.createElement('div'); card.className = 'post-card';
                 
                 let imagesHtml = '';
                 if (post.embed && post.embed.images) {
-                    post.embed.images.forEach(img => {
-                        imagesHtml += `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="post-image" alt="post image">`;
-                    });
+                    post.embed.images.forEach(img => { imagesHtml += `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="post-image" alt="post image">`; });
                 }
 
                 let embedHtml = renderEmbed(post.embed);
-                let extraCardId = null;
-                let extraCardUrl = null;
+                let extraCardId = null; let extraCardUrl = null;
 
-                // Native Embedがない場合、テキスト内のURLを探してカード化を試みる
                 if (!embedHtml) {
-                    const urlRegex = /(https?:\/\/[^\s　]+)/;
-                    const match = record.text.match(urlRegex);
-                    if (match) {
-                        extraCardUrl = match[0];
-                        // YouTubeならサムネイル画像を即時生成（高速化のため）
-                        if (extraCardUrl.match(/(youtube\.com|youtu\.be)/)) {
-                            // YouTubeロジックはV7同様（ここでは簡略化してAPI fetchに任せるか、既存ロジックを使う）
-                            // 統一感のため今回はAPI fetcherに任せますが、読み込みラグ解消のためLoadingを表示
+                    embedHtml = createYoutubeCard(record.text);
+                    if (!embedHtml) {
+                        const urlRegex = /(https?:\/\/[^\s　]+)/;
+                        const match = record.text.match(urlRegex);
+                        if (match) {
+                            extraCardUrl = match[0];
+                            extraCardId = `card-load-${index}`;
+                            embedHtml = `<div id="${extraCardId}" class="card-loading">リンク情報を読み込み中...</div>`;
                         }
-                        extraCardId = `card-load-${index}`;
-                        embedHtml = `<div id="${extraCardId}" class="card-loading">リンク情報を読み込み中...</div>`;
                     }
                 }
 
                 const formattedText = linkify(record.text);
-
-                card.innerHTML = `
-                    <img src="${author.avatar}" class="avatar" alt="${author.displayName}">
-                    <div class="content">
-                        <div class="header">
-                            <a href="https://bsky.app/profile/${author.handle}" target="_blank" class="display-name">${author.displayName || author.handle}</a>
-                            <a href="https://bsky.app/profile/${author.handle}" target="_blank" class="handle">@${author.handle}</a>
-                            <span class="time">· ${timeStr}</span>
-                        </div>
-                        <div class="text">${formattedText}</div>
-                        ${imagesHtml}
-                        ${embedHtml || ''}
-                    </div>
-                `;
+                card.innerHTML = `<img src="${author.avatar}" class="avatar" alt="${author.displayName}"><div class="content"><div class="header"><a href="https://bsky.app/profile/${author.handle}" target="_blank" class="display-name">${author.displayName || author.handle}</a><a href="https://bsky.app/profile/${author.handle}" target="_blank" class="handle">@${author.handle}</a><span class="time">· ${timeStr}</span></div><div class="text">${formattedText}</div>${imagesHtml}${embedHtml || ''}</div>`;
                 container.appendChild(card);
 
-                // 後追いでカード情報を取得
-                if (extraCardId && extraCardUrl) {
-                    fetchOgData(extraCardUrl, extraCardId);
-                }
+                if (extraCardId && extraCardUrl) { fetchOgData(extraCardUrl, extraCardId); }
             });
-        } catch (error) {
-            container.innerHTML += `<div class="loading">エラー: ${error.message}</div>`;
-        }
+        } catch (error) { container.innerHTML += `<div class="loading">エラー: ${error.message}</div>`; }
     }
     fetchBlueskyPosts();
 
-    // Modal logic
-    const modal = document.getElementById('image-modal');
-    const modalImg = document.getElementById('expanded-image');
-    const closeBtn = document.getElementsByClassName('close-btn')[0];
-    document.getElementById('feed-container').addEventListener('click', function(e) {
-        if (e.target.classList.contains('post-image')) {
-            const fullsizeUrl = e.target.getAttribute('data-fullsize') || e.target.src;
-            modalImg.src = fullsizeUrl;
-            modal.classList.add('show');
-        }
-    });
+    const modal = document.getElementById('image-modal'); const modalImg = document.getElementById('expanded-image'); const closeBtn = document.getElementsByClassName('close-btn')[0];
+    document.getElementById('feed-container').addEventListener('click', function(e) { if (e.target.classList.contains('post-image')) { const fullsizeUrl = e.target.getAttribute('data-fullsize') || e.target.src; modalImg.src = fullsizeUrl; modal.classList.add('show'); } });
     closeBtn.onclick = function() { modal.classList.remove('show'); setTimeout(() => { modalImg.src = ''; }, 400); }
     modal.onclick = function(e) { if (e.target === modal) { modal.classList.remove('show'); setTimeout(() => { modalImg.src = ''; }, 400); }}
 </script>
