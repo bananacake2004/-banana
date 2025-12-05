@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bluesky Feed V18.0 RISE</title>
+    <title>Bluesky Feed V19.0 RISE</title>
     <style>
-        /* Ver 18.0: PC Image 50% Width & Previous Fixes */
+        /* Ver 19.0: No Image Zoom (Simple View) */
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-main: #0b0f14; --text-sub: #42576c; --accent-blue: #0085ff; --border-color: #e1e3e5; --hover-bg: #f5f7f9; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; color: var(--text-main); }
         /* body { background-color: transparent; padding: 10px 0; } */
@@ -22,21 +22,23 @@
         .text { font-size: 15px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 10px; }
         .text a { color: var(--accent-blue); text-decoration: none; } .text a:hover { text-decoration: underline; }
         
-        /* ★画像スタイルの調整 */
+        /* ★画像スタイル: 拡大機能を削除したのでカーソルも通常に戻しました */
         .post-image {
             margin-top: 8px; border-radius: 6px;
             width: 100%;            /* スマホ: 横幅いっぱい */
             height: auto; 
             max-height: 200px; 
             object-fit: cover; 
-            border: 1px solid var(--border-color); cursor: zoom-in; display: block;
+            border: 1px solid var(--border-color);
+            display: block;
+            /* cursor: zoom-in;  <-- 削除 */
         }
 
-        /* ★PC（画面幅768px以上）の場合の特別ルール */
+        /* ★PC（画面幅768px以上）の場合の画像サイズ制限（前回同様） */
         @media (min-width: 768px) {
             .post-image {
                 width: 50%;         /* PC: 横幅を半分にする */
-                max-height: 150px;  /* 高さも少し抑える */
+                max-height: 150px;
             }
         }
         
@@ -54,41 +56,15 @@
         .quote-name { font-weight: 700; font-size: 13px; } .quote-handle { font-size: 13px; color: var(--text-sub); } .quote-text { font-size: 14px; }
         .loading { text-align: center; color: var(--text-sub); margin-top: 20px; }
         
-        /* モーダル */
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s; }
-        .modal.show { display: flex; opacity: 1; }
-        .modal-wrapper { position: relative; max-width: 95%; max-height: 60vh; }
-        .modal-content {
-            width: auto; height: auto;
-            max-width: 100%; max-height: 60vh;
-            object-fit: contain; border-radius: 4px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-            transform: scale(0.95); transition: transform 0.3s;
-            display: block;
-        }
-        .modal.show .modal-content { transform: scale(1); }
-        .close-btn {
-            position: absolute; top: -20px; right: -20px;
-            color: #fff; background: rgba(0,0,0,0.6);
-            width: 40px; height: 40px; border-radius: 50%;
-            text-align: center; line-height: 40px; font-size: 28px; font-weight: bold;
-            cursor: pointer; z-index: 1002;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-        }
-        .close-btn:hover { background: rgba(0,0,0,0.8); }
+        /* モーダル関連のCSSはすべて削除しました */
     </style>
 </head>
 <body>
 <div class="container" id="feed-container">
-    <div class="version-tag">Ver 18.0 (This sites is created by RISE)</div>
+    <div class="version-tag">Ver 19.0 (This sites is created by RISE)</div>
     <div class="loading">読み込み中...</div>
 </div>
-<div id="image-modal" class="modal">
-    <div class="modal-wrapper">
-        <span class="close-btn">&times;</span>
-        <img class="modal-content" id="expanded-image">
-    </div>
-</div>
+
 <script>
     const HANDLE = 'katsuobushi-kawa.bsky.social';
     const API_URL = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${HANDLE}&filter=posts_no_replies&limit=10`;
@@ -135,104 +111,4 @@
     }
 
     function generateYoutubeCardHtml(videoId) {
-        return `<a href="https://www.youtube.com/watch?v=${videoId}" target="_blank" class="embed-card"><img src="https://img.youtube.com/vi/${videoId}/hqdefault.jpg" class="embed-thumb" alt="YouTube Thumbnail"><div class="embed-info"><div class="embed-title">YouTube Video</div><div class="embed-desc">Click to watch on YouTube</div><div class="embed-host">youtube.com</div></div></a>`;
-    }
-
-    async function fetchOgData(url, targetElementId) {
-        const target = document.getElementById(targetElementId);
-        try {
-            if(target) target.style.display = 'block';
-            const res = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}`);
-            const json = await res.json();
-            if (!target || json.status !== 'success') { if(target) target.style.display = 'none'; return; }
-            const data = json.data;
-            const thumbHtml = data.image ? `<img src="${data.image.url}" class="embed-thumb" alt="thumbnail">` : '';
-            const title = data.title || url; const host = new URL(url).hostname;
-            target.innerHTML = `<a href="${url}" target="_blank" class="embed-card" style="margin-top:10px;">${thumbHtml}<div class="embed-info"><div class="embed-title">${title}</div><div class="embed-desc">${data.description||''}</div><div class="embed-host">${host}</div></div></a>`;
-            target.className = '';
-        } catch (e) { if(target) target.style.display = 'none'; }
-    }
-
-    function renderEmbed(embed) {
-        if (!embed) return null;
-        if (embed.$type === 'app.bsky.embed.external') {
-            const ext = embed.external; const videoId = extractYoutubeId(ext.uri);
-            if (videoId) return generateYoutubeCardHtml(videoId);
-            const thumb = ext.thumb ? `<img src="${ext.thumb}" class="embed-thumb">` : '';
-            let hostname = 'link'; try { hostname = new URL(ext.uri).hostname; } catch(e) {}
-            return `<a href="${ext.uri}" target="_blank" class="embed-card">${thumb}<div class="embed-info"><div class="embed-title">${ext.title||'No Title'}</div><div class="embed-desc">${ext.description||''}</div><div class="embed-host">${hostname}</div></div></a>`;
-        }
-        if (embed.$type === 'app.bsky.embed.record') {
-            const rec = embed.record; if (!rec.value) return '';
-            const author = rec.author || {displayName:'Unknown', handle:'unknown'};
-            const postId = rec.uri.split('/').pop();
-            return `<a href="https://bsky.app/profile/${author.handle}/post/${postId}" target="_blank" style="text-decoration:none;"><div class="quote-card"><div class="quote-header"><img src="${author.avatar||''}" class="quote-avatar"><span class="quote-name">${author.displayName||author.handle}</span><span class="quote-handle">@${author.handle}</span></div><div class="quote-text">${rec.value.text||''}</div></div></a>`;
-        }
-        if (embed.$type === 'app.bsky.embed.recordWithMedia') {
-            let media = ''; if(embed.media.images) embed.media.images.forEach(img => { media += `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="post-image" alt="post image">`; });
-            return media + (renderEmbed(embed.record) || '');
-        }
-        return null;
-    }
-
-    async function fetchBlueskyPosts() {
-        const container = document.getElementById('feed-container');
-        try {
-            const response = await fetch(API_URL);
-            if (!response.ok) throw new Error('データ取得に失敗しました');
-            const data = await response.json();
-            const versionTag = container.querySelector('.version-tag');
-            container.innerHTML = ''; if(versionTag) container.appendChild(versionTag);
-
-            data.feed.forEach((item, index) => {
-                const post = item.post; const author = post.author; const record = post.record;
-                const date = new Date(record.createdAt);
-                const timeStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
-                const card = document.createElement('div'); card.className = 'post-card';
-                
-                let imagesHtml = '';
-                if (post.embed && post.embed.images) {
-                    post.embed.images.forEach(img => { imagesHtml += `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="post-image" alt="post image">`; });
-                }
-
-                let embedHtml = renderEmbed(post.embed);
-                let extraCardId = null; let extraCardUrl = null;
-
-                if (!embedHtml) {
-                    if (record.facets) {
-                        for (const facet of record.facets) {
-                            if (facet.features) {
-                                for (const feature of facet.features) {
-                                    if (feature.$type === 'app.bsky.richtext.facet#link' && feature.uri) {
-                                        const videoId = extractYoutubeId(feature.uri);
-                                        if (videoId) { embedHtml = generateYoutubeCardHtml(videoId); break; }
-                                        else if (!extraCardUrl) { extraCardUrl = feature.uri; }
-                                    }
-                                }
-                            }
-                            if (embedHtml) break;
-                        }
-                    }
-                    if (!embedHtml && extraCardUrl) {
-                        extraCardId = `card-load-${index}`;
-                        embedHtml = `<div id="${extraCardId}" class="card-loading">リンク情報を取得中...</div>`;
-                    }
-                }
-
-                const formattedText = formatRichText(record);
-                card.innerHTML = `<img src="${author.avatar}" class="avatar" alt="${author.displayName}"><div class="content"><div class="header"><a href="https://bsky.app/profile/${author.handle}" target="_blank" class="display-name">${author.displayName || author.handle}</a><a href="https://bsky.app/profile/${author.handle}" target="_blank" class="handle">@${author.handle}</a><span class="time">· ${timeStr}</span></div><div class="text">${formattedText}</div>${imagesHtml}${embedHtml || ''}</div>`;
-                container.appendChild(card);
-
-                if (extraCardId && extraCardUrl) { fetchOgData(extraCardUrl, extraCardId); }
-            });
-        } catch (error) { container.innerHTML += `<div class="loading">エラー: ${error.message}</div>`; }
-    }
-    fetchBlueskyPosts();
-
-    const modal = document.getElementById('image-modal'); const modalImg = document.getElementById('expanded-image'); const closeBtn = document.getElementsByClassName('close-btn')[0];
-    document.getElementById('feed-container').addEventListener('click', function(e) { if (e.target.classList.contains('post-image')) { const fullsizeUrl = e.target.getAttribute('data-fullsize') || e.target.src; modalImg.src = fullsizeUrl; modal.classList.add('show'); } });
-    closeBtn.onclick = function() { modal.classList.remove('show'); setTimeout(() => { modalImg.src = ''; }, 300); }
-    modal.onclick = function(e) { if (e.target === modal || e.target === modalImg.parentElement) { modal.classList.remove('show'); setTimeout(() => { modalImg.src = ''; }, 300); }}
-</script>
-</body>
-</html>
+        return `<a href="https://www.youtube.com/watch?v=${videoId}" target="_blank" class="embed-card"><img src="https
