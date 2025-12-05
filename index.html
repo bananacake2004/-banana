@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bluesky Feed V15.0 RISE</title>
+    <title>Bluesky Feed V16.0 RISE</title>
     <style>
-        /* Ver 15.0: Byte-Level Link Processing & Tiny Images */
+        /* Ver 16.0: Modal Fix (No Scroll) & Proper Image Layout */
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-main: #0b0f14; --text-sub: #42576c; --accent-blue: #0085ff; --border-color: #e1e3e5; --hover-bg: #f5f7f9; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; color: var(--text-main); }
         /* body { background-color: transparent; padding: 10px 0; } */
@@ -22,11 +22,17 @@
         .text { font-size: 15px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 10px; }
         .text a { color: var(--accent-blue); text-decoration: none; } .text a:hover { text-decoration: underline; }
         
-        /* ★画像サイズ：50px（極小サイズ） */
+        /* ★タイムライン画像の改善: アスペクト比維持しつつ最大高さを制限 */
         .post-image {
-            margin-top: 8px; border-radius: 4px; width: 100%;
-            height: 50px; /* ★ご要望通り半分程度にしました */
-            object-fit: cover; border: 1px solid var(--border-color); cursor: zoom-in; display: block;
+            margin-top: 8px;
+            border-radius: 6px;
+            width: 100%;
+            height: auto;           /* 高さは自動（変形させない） */
+            max-height: 200px;      /* ただし200px以上にはしない */
+            object-fit: cover;      /* 枠に合わせて綺麗に収める */
+            border: 1px solid var(--border-color);
+            cursor: zoom-in;
+            display: block;
         }
         
         .embed-card { margin-top: 10px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; text-decoration: none; color: inherit; display: block; transition: background-color 0.2s; background-color: var(--card-bg); min-height: 80px; }
@@ -43,16 +49,32 @@
         .quote-avatar { width: 20px; height: 20px; border-radius: 50%; }
         .quote-name { font-weight: 700; font-size: 13px; } .quote-handle { font-size: 13px; color: var(--text-sub); } .quote-text { font-size: 14px; }
         .loading { text-align: center; color: var(--text-sub); margin-top: 20px; }
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); align-items: center; justify-content: center; opacity: 0; transition: opacity 0.4s; backdrop-filter: blur(4px); }
+        
+        /* ★モーダル（拡大表示）の改善: 画面内に収める */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s; backdrop-filter: blur(4px); }
         .modal.show { display: flex; opacity: 1; }
-        .modal-content { max-width: 93%; max-height: 93%; object-fit: contain; border-radius: 4px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); transform: scale(0.92) translateY(30px); transition: transform 0.4s; }
-        .modal.show .modal-content { transform: scale(1) translateY(0); }
+        
+        /* 画像サイズを画面の高さの85%に制限 -> これではみ出さない */
+        .modal-content {
+            max-width: 95%;
+            max-height: 85vh; /* ビューポートの高さの85% */
+            width: auto;      /* 横幅はなりゆき */
+            height: auto;
+            object-fit: contain;
+            border-radius: 4px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            transform: scale(0.95); transition: transform 0.3s;
+        }
+        .modal.show .modal-content { transform: scale(1); }
+        
+        /* 閉じるボタン: 右上に固定 */
         .close-btn { position: absolute; top: 20px; right: 30px; color: rgba(255,255,255,0.8); font-size: 50px; font-weight: 300; cursor: pointer; z-index: 1001; line-height: 60px; background: rgba(0,0,0,0.4); width: 60px; height: 60px; text-align: center; border-radius: 50%; }
+        .close-btn:hover { background: rgba(0,0,0,0.7); }
     </style>
 </head>
 <body>
 <div class="container" id="feed-container">
-    <div class="version-tag">Ver 15.0 (This sites is created by RISE)</div>
+    <div class="version-tag">Ver 16.0 (This sites is created by RISE)</div>
     <div class="loading">読み込み中...</div>
 </div>
 <div id="image-modal" class="modal"><span class="close-btn">&times;</span><img class="modal-content" id="expanded-image"></div>
@@ -66,12 +88,10 @@
         return match ? match[1] : null;
     }
 
-    // ★HTMLエスケープ関数
     function escapeHtml(text) {
         return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
     }
 
-    // ★最強のリンク処理：バイト列を使って正確にリンクを復元する（公式準拠）
     function formatRichText(record) {
         const text = record.text;
         if (!text) return '';
@@ -80,8 +100,6 @@
         const encoder = new TextEncoder();
         const decoder = new TextDecoder();
         const textBytes = encoder.encode(text);
-        
-        // Facetを位置順にソート
         const facets = record.facets.sort((a, b) => a.index.byteStart - b.index.byteStart);
         
         let html = '';
@@ -90,18 +108,12 @@
         facets.forEach(facet => {
             const start = facet.index.byteStart;
             const end = facet.index.byteEnd;
-
-            // リンクの前のテキスト
-            if (start > lastByteIndex) {
-                html += escapeHtml(decoder.decode(textBytes.slice(lastByteIndex, start)));
-            }
-
-            // リンクになっているテキスト（...となってる部分）
-            const linkText = escapeHtml(decoder.decode(textBytes.slice(start, end)));
+            if (start > lastByteIndex) html += escapeHtml(decoder.decode(textBytes.slice(lastByteIndex, start)));
             
-            // Facetの中からLinkタイプを探す
+            const linkText = escapeHtml(decoder.decode(textBytes.slice(start, end)));
             let url = '#';
             let isLink = false;
+            
             if (facet.features) {
                 const linkFeature = facet.features.find(f => f.$type === 'app.bsky.richtext.facet#link');
                 if (linkFeature) {
@@ -111,22 +123,16 @@
             }
 
             if (isLink) {
-                // YouTubeの場合は強制的に再生可能なURLへ変換
                 const ytId = extractYoutubeId(url);
                 if (ytId) url = `https://www.youtube.com/watch?v=${ytId}`;
                 html += `<a href="${url}" target="_blank" rel="noopener noreferrer">${linkText}</a>`;
             } else {
-                html += linkText; // リンクじゃないFacet（メンションなど）はそのまま表示
+                html += linkText;
             }
-
             lastByteIndex = end;
         });
 
-        // 残りのテキスト
-        if (lastByteIndex < textBytes.length) {
-            html += escapeHtml(decoder.decode(textBytes.slice(lastByteIndex)));
-        }
-
+        if (lastByteIndex < textBytes.length) html += escapeHtml(decoder.decode(textBytes.slice(lastByteIndex)));
         return html;
     }
 
@@ -153,7 +159,7 @@
             const thumbHtml = data.image ? `<img src="${data.image.url}" class="embed-thumb" alt="thumbnail">` : '';
             const title = data.title || url;
             const host = new URL(url).hostname;
-            target.innerHTML = `<a href="${url}" target="_blank" class="embed-card" style="margin-top:0;">${thumbHtml}<div class="embed-info"><div class="embed-title">${title}</div><div class="embed-desc">${data.description||''}</div><div class="embed-host">${host}</div></div></a>`;
+            target.innerHTML = `<a href="${url}" target="_blank" class="embed-card" style="margin-top:10px;">${thumbHtml}<div class="embed-info"><div class="embed-title">${title}</div><div class="embed-desc">${data.description||''}</div><div class="embed-host">${host}</div></div></a>`;
             target.className = '';
         } catch (e) {
             if(target) target.style.display = 'none';
@@ -206,7 +212,6 @@
                 let embedHtml = renderEmbed(post.embed);
                 let extraCardId = null; let extraCardUrl = null;
 
-                // Embedがない場合のカード生成処理（Facetsを参照）
                 if (!embedHtml) {
                     if (record.facets) {
                         for (const facet of record.facets) {
@@ -226,16 +231,13 @@
                             if (embedHtml) break;
                         }
                     }
-                    
                     if (!embedHtml && extraCardUrl) {
                         extraCardId = `card-load-${index}`;
                         embedHtml = `<div id="${extraCardId}" class="card-loading">リンク情報を取得中...</div>`;
                     }
                 }
 
-                // ★新しい正確なリンク生成関数を使う
                 const formattedText = formatRichText(record);
-                
                 card.innerHTML = `<img src="${author.avatar}" class="avatar" alt="${author.displayName}"><div class="content"><div class="header"><a href="https://bsky.app/profile/${author.handle}" target="_blank" class="display-name">${author.displayName || author.handle}</a><a href="https://bsky.app/profile/${author.handle}" target="_blank" class="handle">@${author.handle}</a><span class="time">· ${timeStr}</span></div><div class="text">${formattedText}</div>${imagesHtml}${embedHtml || ''}</div>`;
                 container.appendChild(card);
 
