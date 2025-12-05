@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bluesky Feed V4</title>
+    <style>
+        :root {
+            --bg-color: #f1f3f5;
+            --card-bg: #ffffff;
+            --text-main: #0b0f14;
+            --text-sub: #42576c;
+            --accent-blue: #0085ff;
+            --border-color: #e1e3e5;
+            --hover-bg: #f5f7f9;
+            --quote-bg: #f8f9fa;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0; padding: 20px; color: var(--text-main);
+        }
+        /* body { background-color: transparent; padding: 10px 0; } */
+
+        .container { max-width: 600px; margin: 0 auto; }
+
+        .post-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px; padding: 16px; margin-bottom: 12px;
+            display: flex; gap: 12px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background-color: #eee; flex-shrink: 0; }
+        .content { flex: 1; min-width: 0; }
+        
+        .header { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; flex-wrap: wrap; }
+        .display-name { font-weight: 700; font-size: 15px; color: var(--text-main); text-decoration: none; }
+        .handle { color: var(--text-sub); font-size: 14px; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .time { color: var(--text-sub); font-size: 14px; white-space: nowrap; }
+
+        .text { font-size: 15px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 10px; }
+        .text a { color: var(--accent-blue); text-decoration: none; }
+        .text a:hover { text-decoration: underline; }
+
+        .post-image { margin-top: 8px; border-radius: 8px; max-width: 100%; height: auto; border: 1px solid var(--border-color); cursor: zoom-in; display: block; }
+        .post-image:hover { opacity: 0.9; }
+
+        /* リンクカード & 引用投稿のスタイル */
+        .embed-card {
+            margin-top: 10px; border: 1px solid var(--border-color); border-radius: 8px;
+            overflow: hidden; text-decoration: none; color: inherit; display: block;
+            transition: background-color 0.2s; background-color: var(--card-bg);
+        }
+        .embed-card:hover { background-color: var(--hover-bg); text-decoration: none; }
+        .embed-thumb { width: 100%; height: 160px; object-fit: cover; display: block; border-bottom: 1px solid var(--border-color); }
+        .embed-info { padding: 10px 12px; }
+        .embed-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .embed-desc { font-size: 13px; color: var(--text-sub); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-bottom: 4px; }
+        .embed-host { font-size: 12px; color: var(--text-sub); }
+
+        /* 引用（Quote）専用スタイル */
+        .quote-card {
+            margin-top: 10px; border: 1px solid var(--border-color); border-radius: 8px;
+            padding: 12px; background-color: var(--card-bg); cursor: pointer;
+        }
+        .quote-header { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+        .quote-avatar { width: 20px; height: 20px; border-radius: 50%; }
+        .quote-name { font-weight: 700; font-size: 13px; color: var(--text-main); }
+        .quote-handle { font-size: 13px; color: var(--text-sub); }
+        .quote-text { font-size: 14px; color: var(--text-main); }
+
+        .loading { text-align: center; color: var(--text-sub); margin-top: 20px; }
+
+        /* モーダル */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); align-items: center; justify-content: center; opacity: 0; transition: opacity 0.4s; backdrop-filter: blur(4px); }
+        .modal.show { display: flex; opacity: 1; }
+        .modal-content { max-width: 93%; max-height: 93%; object-fit: contain; border-radius: 4px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); transform: scale(0.92) translateY(30px); transition: transform 0.4s; }
+        .modal.show .modal-content { transform: scale(1) translateY(0); }
+        .close-btn { position: absolute; top: 20px; right: 30px; color: rgba(255,255,255,0.8); font-size: 50px; font-weight: 300; cursor: pointer; z-index: 1001; line-height: 60px; background: rgba(0,0,0,0.4); width: 60px; height: 60px; text-align: center; border-radius: 50%; transition: all 0.2s ease; }
+        .close-btn:hover { color: #ffffff; background: rgba(0,0,0,0.7); transform: scale(1.1) rotate(90deg); }
+    </style>
+</head>
+<body>
+
+<div class="container" id="feed-container">
+    <div class="loading">読み込み中...</div>
+</div>
+
+<div id="image-modal" class="modal">
+    <span class="close-btn">&times;</span>
+    <img class="modal-content" id="expanded-image" alt="expanded image">
+</div>
+
+<script>
+    const HANDLE = 'katsuobushi-kawa.bsky.social';
+    const API_URL = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${HANDLE}&filter=posts_no_replies&limit=10`;
+
+    function linkify(text) {
+        if (!text) return '';
+        let escapedText = text
+            .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        // URL検出用正規表現（強化版）
+        const urlRegex = /(https?:\/\/[^\s　]+)/g;
+        return escapedText.replace(urlRegex, function(url) {
+            return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+        });
+    }
+
+    // 埋め込みコンテンツ（Embed）をHTMLにする関数
+    function renderEmbed(embed) {
+        if (!embed) return '';
+
+        // 1. 外部リンク（YouTubeやWeb記事）
+        if (embed.$type === 'app.bsky.embed.external') {
+            const ext = embed.external;
+            const thumbImg = ext.thumb ? `<img src="${ext.thumb}" class="embed-thumb" alt="thumbnail">` : '';
+            return `
+                <a href="${ext.uri}" target="_blank" class="embed-card">
+                    ${thumbImg}
+                    <div class="embed-info">
+                        <div class="embed-title">${ext.title || 'No Title'}</div>
+                        <div class="embed-desc">${ext.description || ''}</div>
+                        <div class="embed-host">${new URL(ext.uri).hostname}</div>
+                    </div>
+                </a>`;
+        }
+        
+        // 2. 引用投稿（Quote Post）
+        if (embed.$type === 'app.bsky.embed.record') {
+            const rec = embed.record;
+            if (!rec.value) return ''; // 削除された投稿などの場合
+            const author = rec.author || { displayName: 'Unknown', handle: 'unknown' };
+            const text = rec.value.text || '';
+            return `
+                <a href="https://bsky.app/profile/${author.handle}/post/${rec.uri.split('/').pop()}" target="_blank" style="text-decoration:none;">
+                <div class="quote-card">
+                    <div class="quote-header">
+                        <img src="${author.avatar || ''}" class="quote-avatar" alt="">
+                        <span class="quote-name">${author.displayName || author.handle}</span>
+                        <span class="quote-handle">@${author.handle}</span>
+                    </div>
+                    <div class="quote-text">${text}</div>
+                </div>
+                </a>`;
+        }
+
+        // 3. 画像付きの引用（Media + Quote）
+        if (embed.$type === 'app.bsky.embed.recordWithMedia') {
+            // まずメディア（画像）を表示し、その後に引用を表示
+            let mediaHtml = '';
+            if (embed.media && embed.media.images) {
+                 embed.media.images.forEach(img => {
+                    mediaHtml += `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="post-image" alt="post image">`;
+                });
+            }
+            return mediaHtml + renderEmbed(embed.record); // 再帰的に引用部分を処理
+        }
+
+        return '';
+    }
+
+    async function fetchBlueskyPosts() {
+        const container = document.getElementById('feed-container');
+        try {
+            const response = await fetch(API_URL);
+            if (!response.ok) throw new Error('データ取得に失敗しました');
+            const data = await response.json();
+            container.innerHTML = '';
+            
+            data.feed.forEach(item => {
+                const post = item.post;
+                const author = post.author;
+                const record = post.record;
+                const date = new Date(record.createdAt);
+                const timeStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+                
+                const card = document.createElement('div');
+                card.className = 'post-card';
+                
+                // 画像（通常の画像投稿）
+                let imagesHtml = '';
+                if (post.embed && post.embed.images) {
+                    post.embed.images.forEach(img => {
+                        imagesHtml += `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="post-image" alt="post image">`;
+                    });
+                }
+
+                // 複雑なEmbed（外部リンク、引用など）の処理
+                const embedHtml = renderEmbed(post.embed);
+
+                // テキストのリンク化
+                const formattedText = linkify(record.text);
+
+                card.innerHTML = `
+                    <img src="${author.avatar}" class="avatar" alt="${author.displayName}">
+                    <div class="content">
+                        <div class="header">
+                            <a href="https://bsky.app/profile/${author.handle}" target="_blank" class="display-name">${author.displayName || author.handle}</a>
+                            <a href="https://bsky.app/profile/${author.handle}" target="_blank" class="handle">@${author.handle}</a>
+                            <span class="time">· ${timeStr}</span>
+                        </div>
+                        <div class="text">${formattedText}</div>
+                        ${imagesHtml}
+                        ${embedHtml}
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        } catch (error) {
+            container.innerHTML = `<div class="loading">エラーが発生しました: ${error.message}</div>`;
+        }
+    }
+    fetchBlueskyPosts();
+
+    // モーダル制御
+    const modal = document.getElementById('image-modal');
+    const modalImg = document.getElementById('expanded-image');
+    const closeBtn = document.getElementsByClassName('close-btn')[0];
+
+    document.getElementById('feed-container').addEventListener('click', function(e) {
+        if (e.target.classList.contains('post-image')) {
+            const fullsizeUrl = e.target.getAttribute('data-fullsize') || e.target.src;
+            modalImg.src = fullsizeUrl;
+            modal.classList.add('show');
+        }
+    });
+    closeBtn.onclick = function() { modal.classList.remove('show'); setTimeout(() => { modalImg.src = ''; }, 400); }
+    modal.onclick = function(e) { if (e.target === modal) { modal.classList.remove('show'); setTimeout(() => { modalImg.src = ''; }, 400); }}
+</script>
+
+</body>
+</html>
