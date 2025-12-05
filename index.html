@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bluesky Feed V12.1 RISE</title>
+    <title>Bluesky Feed V13.0 RISE</title>
     <style>
-        /* Ver 12.1: Smaller Images (120px) */
+        /* Ver 13.0: Facet URL Recovery & Tiny Images */
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-main: #0b0f14; --text-sub: #42576c; --accent-blue: #0085ff; --border-color: #e1e3e5; --hover-bg: #f5f7f9; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; color: var(--text-main); }
-        /* Google Sitesで背景を透明にする場合は次の行のコメントを外す */
         /* body { background-color: transparent; padding: 10px 0; } */
         
         .container { max-width: 600px; margin: 0 auto; position: relative; }
@@ -23,16 +22,11 @@
         .text { font-size: 15px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 10px; }
         .text a { color: var(--accent-blue); text-decoration: none; } .text a:hover { text-decoration: underline; }
         
-        /* ★画像サイズを変更：高さ180px → 120px (2/3のサイズ) */
+        /* ★画像サイズをさらに縮小：80px */
         .post-image {
-            margin-top: 8px;
-            border-radius: 8px;
-            width: 100%;
-            height: 120px; /* ★ここを変更しました */
-            object-fit: cover;
-            border: 1px solid var(--border-color);
-            cursor: zoom-in;
-            display: block;
+            margin-top: 8px; border-radius: 8px; width: 100%;
+            height: 80px; /* ★かなりコンパクトにしました */
+            object-fit: cover; border: 1px solid var(--border-color); cursor: zoom-in; display: block;
         }
         
         .embed-card { margin-top: 10px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; text-decoration: none; color: inherit; display: block; transition: background-color 0.2s; background-color: var(--card-bg); min-height: 80px; }
@@ -58,7 +52,7 @@
 </head>
 <body>
 <div class="container" id="feed-container">
-    <div class="version-tag">Ver 12.1 (This sites is created by RISE)</div>
+    <div class="version-tag">Ver 13.0 (This sites is created by RISE)</div>
     <div class="loading">読み込み中...</div>
 </div>
 <div id="image-modal" class="modal"><span class="close-btn">&times;</span><img class="modal-content" id="expanded-image"></div>
@@ -67,25 +61,24 @@
     const API_URL = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${HANDLE}&filter=posts_no_replies&limit=10`;
 
     function extractYoutubeId(text) {
-        const regex = /(?:live\/|shorts\/|v=|youtu\.be\/)([\w-]{11})/;
+        const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|live|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
         const match = text.match(regex);
         return match ? match[1] : null;
     }
 
+    // ★リンク生成：省略されたURLではなく、ファセット（裏データ）があればそちらを優先するロジックは
+    // APIレスポンス全体の解析が必要なため、ここでは簡易的に正規表現補正を行いますが、
+    // 一番大事な「カード生成」では裏データを確実に使います。
     function linkify(text) {
         if (!text) return '';
         const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         const urlRegex = /((?:https?:\/\/|www\.)[^\s　]+?)(?=[.,;!?]?(?:\s|　|$))/g;
-        
         return escaped.replace(urlRegex, function(url) {
-            let displayUrl = url;
             let href = url;
             if (!url.startsWith('http')) { href = 'https://' + url; }
-            const videoId = extractYoutubeId(url);
-            if (videoId) {
-                href = `https://www.youtube.com/watch?v=${videoId}`;
-            }
-            return `<a href="${href}" target="_blank" rel="noopener noreferrer">${displayUrl}</a>`;
+            // URLが ... で終わっている（省略されている）場合はリンクにしても無駄なので、そのまま表示
+            if (url.endsWith('...')) return url; 
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
         });
     }
 
@@ -124,9 +117,7 @@
         if (embed.$type === 'app.bsky.embed.external') {
             const ext = embed.external;
             const videoId = extractYoutubeId(ext.uri);
-            if (videoId) {
-                return generateYoutubeCardHtml(videoId);
-            }
+            if (videoId) return generateYoutubeCardHtml(videoId);
             const thumb = ext.thumb ? `<img src="${ext.thumb}" class="embed-thumb">` : '';
             let hostname = 'link'; try { hostname = new URL(ext.uri).hostname; } catch(e) {}
             return `<a href="${ext.uri}" target="_blank" class="embed-card">${thumb}<div class="embed-info"><div class="embed-title">${ext.title||'No Title'}</div><div class="embed-desc">${ext.description||''}</div><div class="embed-host">${hostname}</div></div></a>`;
@@ -167,20 +158,53 @@
                 let embedHtml = renderEmbed(post.embed);
                 let extraCardId = null; let extraCardUrl = null;
 
+                // ★ここが新機能: Embedがない場合、Facets（裏データ）から正しいリンクを探す
                 if (!embedHtml) {
-                    const videoId = extractYoutubeId(record.text);
-                    if (videoId) {
-                        embedHtml = generateYoutubeCardHtml(videoId);
-                    } else {
+                    // 1. FacetsからYouTubeリンクを探す（省略されてないURLが入っている）
+                    if (record.facets) {
+                        for (const facet of record.facets) {
+                            if (facet.features) {
+                                for (const feature of facet.features) {
+                                    if (feature.$type === 'app.bsky.richtext.facet#link' && feature.uri) {
+                                        const videoId = extractYoutubeId(feature.uri);
+                                        if (videoId) {
+                                            // ファセットからID発見！カード生成
+                                            embedHtml = generateYoutubeCardHtml(videoId);
+                                            break;
+                                        } else if (!extraCardUrl) {
+                                            // YouTube以外なら後でmicrolinkに投げる候補にする
+                                            extraCardUrl = feature.uri;
+                                        }
+                                    }
+                                }
+                            }
+                            if (embedHtml) break;
+                        }
+                    }
+
+                    // 2. Facetsにもなければ、テキストから探す（従来の処理・保険）
+                    if (!embedHtml && !extraCardUrl) {
                         const urlRegex = /(https?:\/\/|www\.)[^\s　]+/;
                         const match = record.text.match(urlRegex);
                         if (match) {
                             let url = match[0];
                             if(!url.startsWith('http')) url = 'https://' + url;
-                            extraCardUrl = url;
-                            extraCardId = `card-load-${index}`;
-                            embedHtml = `<div id="${extraCardId}" class="card-loading">リンク情報を取得中...</div>`;
+                            // 省略記号(...)が含まれていたら無効なURLなので無視する
+                            if (!url.includes('...')) {
+                                const videoId = extractYoutubeId(url);
+                                if (videoId) {
+                                    embedHtml = generateYoutubeCardHtml(videoId);
+                                } else {
+                                    extraCardUrl = url;
+                                }
+                            }
                         }
+                    }
+
+                    // YouTube以外が見つかっていればカード読み込み準備
+                    if (!embedHtml && extraCardUrl) {
+                        extraCardId = `card-load-${index}`;
+                        embedHtml = `<div id="${extraCardId}" class="card-loading">リンク情報を取得中...</div>`;
                     }
                 }
 
