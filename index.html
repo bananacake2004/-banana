@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bluesky Feed V5</title>
+    <title>Bluesky Feed V6</title>
     <style>
-        /* Ver 5.0 Final Code */
+        /* Ver 6.0 Final Code */
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-main: #0b0f14; --text-sub: #42576c; --accent-blue: #0085ff; --border-color: #e1e3e5; --hover-bg: #f5f7f9; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; color: var(--text-main); }
+        /* Google Sitesで背景を透明にする場合は次の行のコメントを外す */
+        /* body { background-color: transparent; padding: 10px 0; } */
         .container { max-width: 600px; margin: 0 auto; position: relative; }
         .version-tag { position: absolute; top: -20px; right: 0; font-size: 10px; color: #aaa; }
         .post-card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; margin-bottom: 12px; display: flex; gap: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
@@ -19,7 +21,19 @@
         .time { color: var(--text-sub); font-size: 14px; white-space: nowrap; }
         .text { font-size: 15px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 10px; }
         .text a { color: var(--accent-blue); text-decoration: none; } .text a:hover { text-decoration: underline; }
-        .post-image { margin-top: 8px; border-radius: 8px; max-width: 100%; height: auto; border: 1px solid var(--border-color); cursor: zoom-in; display: block; }
+        
+        /* 画像スタイルの変更点：高さ制限とトリミングを追加 */
+        .post-image {
+            margin-top: 8px;
+            border-radius: 8px;
+            width: 100%;            /* 横幅は枠いっぱい */
+            max-height: 350px;      /* 高さは最大350pxまで */
+            object-fit: cover;      /* 枠に合わせて良い感じでトリミング */
+            border: 1px solid var(--border-color);
+            cursor: zoom-in;
+            display: block;
+        }
+        
         .embed-card { margin-top: 10px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; text-decoration: none; color: inherit; display: block; transition: background-color 0.2s; background-color: var(--card-bg); }
         .embed-card:hover { background-color: var(--hover-bg); }
         .embed-thumb { width: 100%; height: 160px; object-fit: cover; display: block; border-bottom: 1px solid var(--border-color); }
@@ -42,7 +56,7 @@
 </head>
 <body>
 <div class="container" id="feed-container">
-    <div class="version-tag">Ver 5.0 (Latest)</div>
+    <div class="version-tag">Ver 6.0 (Fixes)</div>
     <div class="loading">読み込み中...</div>
 </div>
 <div id="image-modal" class="modal"><span class="close-btn">&times;</span><img class="modal-content" id="expanded-image"></div>
@@ -50,10 +64,24 @@
     const HANDLE = 'katsuobushi-kawa.bsky.social';
     const API_URL = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${HANDLE}&filter=posts_no_replies&limit=10`;
 
+    // URLをリンクに変換する関数（強化版）
     function linkify(text) {
         if (!text) return '';
+        // HTMLエスケープ
         const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-        return escaped.replace(/(https?:\/\/[^\s　]+)/g, url => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
+        
+        // 強化された正規表現：https://, http://, www., youtu.be などに対応
+        // 文末の句読点などをURLに含めないように調整
+        const urlRegex = /((?:https?:\/\/|www\.|youtu\.be\/)[^\s　]+?)(?=[.,;!?]?(?:\s|　|$))/g;
+        
+        return escaped.replace(urlRegex, function(url) {
+            let href = url;
+            // www. や youtu.be で始まる場合は https:// を補完
+            if (!url.startsWith('http')) {
+                href = 'https://' + url;
+            }
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+        });
     }
 
     function renderEmbed(embed) {
@@ -61,13 +89,16 @@
         if (embed.$type === 'app.bsky.embed.external') {
             const ext = embed.external;
             const thumb = ext.thumb ? `<img src="${ext.thumb}" class="embed-thumb">` : '';
-            return `<a href="${ext.uri}" target="_blank" class="embed-card">${thumb}<div class="embed-info"><div class="embed-title">${ext.title||'No Title'}</div><div class="embed-desc">${ext.description||''}</div><div class="embed-host">${new URL(ext.uri).hostname}</div></div></a>`;
+            let hostname = 'link';
+            try { hostname = new URL(ext.uri).hostname; } catch(e) {}
+            return `<a href="${ext.uri}" target="_blank" class="embed-card">${thumb}<div class="embed-info"><div class="embed-title">${ext.title||'No Title'}</div><div class="embed-desc">${ext.description||''}</div><div class="embed-host">${hostname}</div></div></a>`;
         }
         if (embed.$type === 'app.bsky.embed.record') {
             const rec = embed.record;
             if (!rec.value) return '';
             const author = rec.author || {displayName:'Unknown', handle:'unknown'};
-            return `<a href="https://bsky.app/profile/${author.handle}/post/${rec.uri.split('/').pop()}" target="_blank" style="text-decoration:none;"><div class="quote-card"><div class="quote-header"><img src="${author.avatar||''}" class="quote-avatar"><span class="quote-name">${author.displayName||author.handle}</span><span class="quote-handle">@${author.handle}</span></div><div class="quote-text">${rec.value.text||''}</div></div></a>`;
+            const postId = rec.uri.split('/').pop();
+            return `<a href="https://bsky.app/profile/${author.handle}/post/${postId}" target="_blank" style="text-decoration:none;"><div class="quote-card"><div class="quote-header"><img src="${author.avatar||''}" class="quote-avatar"><span class="quote-name">${author.displayName||author.handle}</span><span class="quote-handle">@${author.handle}</span></div><div class="quote-text">${rec.value.text||''}</div></div></a>`;
         }
         if (embed.$type === 'app.bsky.embed.recordWithMedia') {
             let media = '';
@@ -86,7 +117,6 @@
             if (!response.ok) throw new Error('データ取得に失敗しました');
             const data = await response.json();
             
-            // 既存のコンテンツ（ローディング表示など）をクリア
             const versionTag = container.querySelector('.version-tag');
             container.innerHTML = '';
             if(versionTag) container.appendChild(versionTag);
@@ -104,11 +134,13 @@
                 let imagesHtml = '';
                 if (post.embed && post.embed.images) {
                     post.embed.images.forEach(img => {
+                        // 画像には高画質版のURLも仕込んでおく
                         imagesHtml += `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="post-image" alt="post image">`;
                     });
                 }
 
                 const embedHtml = renderEmbed(post.embed);
+                // 本文をリンク化する
                 const formattedText = linkify(record.text);
 
                 card.innerHTML = `
