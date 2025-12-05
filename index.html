@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bluesky Feed V11.0 RISE</title>
+    <title>Bluesky Feed V12.1 RISE</title>
     <style>
-        /* Ver 11.0: Force YouTube Card & URL Fix & RISE Credit */
+        /* Ver 12.1: Smaller Images (120px) */
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-main: #0b0f14; --text-sub: #42576c; --accent-blue: #0085ff; --border-color: #e1e3e5; --hover-bg: #f5f7f9; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; color: var(--text-main); }
+        /* Google Sitesで背景を透明にする場合は次の行のコメントを外す */
         /* body { background-color: transparent; padding: 10px 0; } */
         
         .container { max-width: 600px; margin: 0 auto; position: relative; }
@@ -22,7 +23,17 @@
         .text { font-size: 15px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 10px; }
         .text a { color: var(--accent-blue); text-decoration: none; } .text a:hover { text-decoration: underline; }
         
-        .post-image { margin-top: 8px; border-radius: 8px; width: 100%; height: 180px; object-fit: cover; border: 1px solid var(--border-color); cursor: zoom-in; display: block; }
+        /* ★画像サイズを変更：高さ180px → 120px (2/3のサイズ) */
+        .post-image {
+            margin-top: 8px;
+            border-radius: 8px;
+            width: 100%;
+            height: 120px; /* ★ここを変更しました */
+            object-fit: cover;
+            border: 1px solid var(--border-color);
+            cursor: zoom-in;
+            display: block;
+        }
         
         .embed-card { margin-top: 10px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; text-decoration: none; color: inherit; display: block; transition: background-color 0.2s; background-color: var(--card-bg); min-height: 80px; }
         .embed-card:hover { background-color: var(--hover-bg); }
@@ -47,7 +58,7 @@
 </head>
 <body>
 <div class="container" id="feed-container">
-    <div class="version-tag">Ver 11.0 (This sites is created by RISE)</div>
+    <div class="version-tag">Ver 12.1 (This sites is created by RISE)</div>
     <div class="loading">読み込み中...</div>
 </div>
 <div id="image-modal" class="modal"><span class="close-btn">&times;</span><img class="modal-content" id="expanded-image"></div>
@@ -55,25 +66,29 @@
     const HANDLE = 'katsuobushi-kawa.bsky.social';
     const API_URL = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${HANDLE}&filter=posts_no_replies&limit=10`;
 
-    function linkify(text) {
-        if (!text) return '';
-        const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-        const urlRegex = /((?:https?:\/\/|www\.)[^\s　]+?)(?=[.,;!?]?(?:\s|　|$))/g;
-        return escaped.replace(urlRegex, function(url) {
-            let href = url;
-            if (!url.startsWith('http')) { href = 'https://' + url; }
-            return `<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
-        });
-    }
-
-    // YouTube ID抽出
     function extractYoutubeId(text) {
-        const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|live|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+        const regex = /(?:live\/|shorts\/|v=|youtu\.be\/)([\w-]{11})/;
         const match = text.match(regex);
         return match ? match[1] : null;
     }
 
-    // YouTubeカードのHTML生成
+    function linkify(text) {
+        if (!text) return '';
+        const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        const urlRegex = /((?:https?:\/\/|www\.)[^\s　]+?)(?=[.,;!?]?(?:\s|　|$))/g;
+        
+        return escaped.replace(urlRegex, function(url) {
+            let displayUrl = url;
+            let href = url;
+            if (!url.startsWith('http')) { href = 'https://' + url; }
+            const videoId = extractYoutubeId(url);
+            if (videoId) {
+                href = `https://www.youtube.com/watch?v=${videoId}`;
+            }
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer">${displayUrl}</a>`;
+        });
+    }
+
     function generateYoutubeCardHtml(videoId) {
         return `
             <a href="https://www.youtube.com/watch?v=${videoId}" target="_blank" class="embed-card">
@@ -106,8 +121,6 @@
 
     function renderEmbed(embed) {
         if (!embed) return null;
-        
-        // YouTubeリンクの強制修正
         if (embed.$type === 'app.bsky.embed.external') {
             const ext = embed.external;
             const videoId = extractYoutubeId(ext.uri);
@@ -118,7 +131,6 @@
             let hostname = 'link'; try { hostname = new URL(ext.uri).hostname; } catch(e) {}
             return `<a href="${ext.uri}" target="_blank" class="embed-card">${thumb}<div class="embed-info"><div class="embed-title">${ext.title||'No Title'}</div><div class="embed-desc">${ext.description||''}</div><div class="embed-host">${hostname}</div></div></a>`;
         }
-
         if (embed.$type === 'app.bsky.embed.record') {
             const rec = embed.record; if (!rec.value) return '';
             const author = rec.author || {displayName:'Unknown', handle:'unknown'};
