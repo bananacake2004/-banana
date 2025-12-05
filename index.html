@@ -1,12 +1,11 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bluesky Feed V10.1 RISE</title>
+    <title>Bluesky Feed V11.0 RISE</title>
     <style>
-        /* Ver 10.1: Force Update & YouTube Live Fix */
+        /* Ver 11.0: Force YouTube Card & URL Fix */
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-main: #0b0f14; --text-sub: #42576c; --accent-blue: #0085ff; --border-color: #e1e3e5; --hover-bg: #f5f7f9; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; color: var(--text-main); }
         /* body { background-color: transparent; padding: 10px 0; } */
@@ -48,7 +47,7 @@
 </head>
 <body>
 <div class="container" id="feed-container">
-    <div class="version-tag">Ver 10.1 (YouTube Live Fix)</div>
+    <div class="version-tag">Ver 11.0 (This sites is created by RISE)</div>
     <div class="loading">読み込み中...</div>
 </div>
 <div id="image-modal" class="modal"><span class="close-btn">&times;</span><img class="modal-content" id="expanded-image"></div>
@@ -59,23 +58,34 @@
     function linkify(text) {
         if (!text) return '';
         const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-        const urlRegex = /((?:https?:\/\/|www\.|youtu\.be\/)[^\s　]+?)(?=[.,;!?]?(?:\s|　|$))/g;
+        // www.youtube... も https:// をつけてリンク化する正規表現
+        const urlRegex = /((?:https?:\/\/|www\.)[^\s　]+?)(?=[.,;!?]?(?:\s|　|$))/g;
         return escaped.replace(urlRegex, function(url) {
-            let href = url; if (!url.startsWith('http')) { href = 'https://' + url; }
+            let href = url;
+            if (!url.startsWith('http')) { href = 'https://' + url; }
             return `<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
         });
     }
 
-    // YouTubeカード生成（Live, Shorts, SIパラメータ対応）
-    function createYoutubeCard(text) {
-        const ytRegex = /(?:youtube\.com\/(?:watch\?v=|live\/|shorts\/)|youtu\.be\/)([\w-]{11})/;
-        const match = text.match(ytRegex);
-        if (match && match[1]) {
-            const videoId = match[1];
-            // どんな形式のリンクでも、最も安定して再生できる watch?v= 形式のカードに変換します
-            return `<a href="https://www.youtube.com/watch?v=${videoId}" target="_blank" class="embed-card"><img src="https://img.youtube.com/vi/${videoId}/hqdefault.jpg" class="embed-thumb" alt="YouTube Thumbnail"><div class="embed-info"><div class="embed-title">YouTube Video</div><div class="embed-desc">Click to watch on YouTube</div><div class="embed-host">youtube.com</div></div></a>`;
-        }
-        return '';
+    // ★YouTubeID抽出の強化（www.有り無し、Live、Shorts全対応）
+    function extractYoutubeId(text) {
+        // あらゆるパターンのYouTube URLからID (11桁) を抜き出す最強の正規表現
+        const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|live|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+        const match = text.match(regex);
+        return match ? match[1] : null;
+    }
+
+    // YouTubeカードのHTML生成（リンクは必ず watch?v= に統一して再生エラーを防ぐ）
+    function generateYoutubeCardHtml(videoId) {
+        return `
+            <a href="https://www.youtube.com/watch?v=${videoId}" target="_blank" class="embed-card">
+                <img src="https://img.youtube.com/vi/${videoId}/hqdefault.jpg" class="embed-thumb" alt="YouTube Thumbnail">
+                <div class="embed-info">
+                    <div class="embed-title">YouTube Video</div>
+                    <div class="embed-desc">Click to watch on YouTube</div>
+                    <div class="embed-host">youtube.com</div>
+                </div>
+            </a>`;
     }
 
     async function fetchOgData(url, targetElementId) {
@@ -98,12 +108,21 @@
 
     function renderEmbed(embed) {
         if (!embed) return null;
+        
+        // ★BlueskyがEmbedを持っている場合でも、中身がYouTubeなら「強制的に」自作カードに置き換える
+        // (BlueskyのYouTube EmbedはLive配信のサムネ取得に失敗することがあるため)
         if (embed.$type === 'app.bsky.embed.external') {
             const ext = embed.external;
+            const videoId = extractYoutubeId(ext.uri);
+            if (videoId) {
+                return generateYoutubeCardHtml(videoId);
+            }
+            // YouTube以外なら通常のカード生成
             const thumb = ext.thumb ? `<img src="${ext.thumb}" class="embed-thumb">` : '';
             let hostname = 'link'; try { hostname = new URL(ext.uri).hostname; } catch(e) {}
             return `<a href="${ext.uri}" target="_blank" class="embed-card">${thumb}<div class="embed-info"><div class="embed-title">${ext.title||'No Title'}</div><div class="embed-desc">${ext.description||''}</div><div class="embed-host">${hostname}</div></div></a>`;
         }
+
         if (embed.$type === 'app.bsky.embed.record') {
             const rec = embed.record; if (!rec.value) return '';
             const author = rec.author || {displayName:'Unknown', handle:'unknown'};
@@ -140,14 +159,20 @@
                 let embedHtml = renderEmbed(post.embed);
                 let extraCardId = null; let extraCardUrl = null;
 
+                // Embedがない場合、またはEmbedがあってもYouTubeのID抽出に失敗した場合の保険
                 if (!embedHtml) {
-                    // YouTube (Live/Shorts対応)
-                    embedHtml = createYoutubeCard(record.text);
-                    if (!embedHtml) {
-                        const urlRegex = /(https?:\/\/[^\s　]+)/;
+                    // テキストからYouTube IDを探す
+                    const videoId = extractYoutubeId(record.text);
+                    if (videoId) {
+                        embedHtml = generateYoutubeCardHtml(videoId);
+                    } else {
+                        // YouTube以外のURLを探す
+                        const urlRegex = /(https?:\/\/|www\.)[^\s　]+/;
                         const match = record.text.match(urlRegex);
                         if (match) {
-                            extraCardUrl = match[0];
+                            let url = match[0];
+                            if(!url.startsWith('http')) url = 'https://' + url;
+                            extraCardUrl = url;
                             extraCardId = `card-load-${index}`;
                             embedHtml = `<div id="${extraCardId}" class="card-loading">リンク情報を取得中...</div>`;
                         }
