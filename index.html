@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bluesky Feed V19.0 RISE</title>
+    <title>Bluesky Feed V20.0 RISE</title>
     <style>
-        /* Ver 19.0: No Image Zoom (Simple View) */
+        /* Ver 20.0: Standard 16:9 Image Aspect Ratio */
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-main: #0b0f14; --text-sub: #42576c; --accent-blue: #0085ff; --border-color: #e1e3e5; --hover-bg: #f5f7f9; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; color: var(--text-main); }
         /* body { background-color: transparent; padding: 10px 0; } */
@@ -22,24 +22,15 @@
         .text { font-size: 15px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 10px; }
         .text a { color: var(--accent-blue); text-decoration: none; } .text a:hover { text-decoration: underline; }
         
-        /* ★画像スタイル: 拡大機能を削除したのでカーソルも通常に戻しました */
+        /* ★画像スタイルの最適化: 16:9の比率で統一 */
         .post-image {
-            margin-top: 8px; border-radius: 6px;
-            width: 100%;            /* スマホ: 横幅いっぱい */
-            height: auto; 
-            max-height: 200px; 
-            object-fit: cover; 
+            margin-top: 8px;
+            border-radius: 8px;
+            width: 100%;            /* 幅はカードと同じ */
+            aspect-ratio: 16 / 9;   /* 高さは幅に合わせて自動調整（YouTubeサムネと同じ比率） */
+            object-fit: cover;      /* 枠いっぱいに綺麗に表示（歪まない） */
             border: 1px solid var(--border-color);
             display: block;
-            /* cursor: zoom-in;  <-- 削除 */
-        }
-
-        /* ★PC（画面幅768px以上）の場合の画像サイズ制限（前回同様） */
-        @media (min-width: 768px) {
-            .post-image {
-                width: 50%;         /* PC: 横幅を半分にする */
-                max-height: 150px;
-            }
         }
         
         .embed-card { margin-top: 10px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; text-decoration: none; color: inherit; display: block; transition: background-color 0.2s; background-color: var(--card-bg); min-height: 80px; }
@@ -49,19 +40,18 @@
         .embed-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
         .embed-desc { font-size: 13px; color: var(--text-sub); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-bottom: 4px; }
         .embed-host { font-size: 12px; color: var(--text-sub); }
+        
         .card-loading { padding: 12px; font-size: 12px; color: #999; text-align: center; border: 1px dashed #ddd; border-radius: 8px; margin-top: 10px; display: none; }
         .quote-card { margin-top: 10px; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; background-color: var(--card-bg); }
         .quote-header { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
         .quote-avatar { width: 20px; height: 20px; border-radius: 50%; }
         .quote-name { font-weight: 700; font-size: 13px; } .quote-handle { font-size: 13px; color: var(--text-sub); } .quote-text { font-size: 14px; }
         .loading { text-align: center; color: var(--text-sub); margin-top: 20px; }
-        
-        /* モーダル関連のCSSはすべて削除しました */
     </style>
 </head>
 <body>
 <div class="container" id="feed-container">
-    <div class="version-tag">Ver 19.0 (This sites is created by RISE)</div>
+    <div class="version-tag">Ver 20.0 (This sites is created by RISE)</div>
     <div class="loading">読み込み中...</div>
 </div>
 
@@ -93,12 +83,15 @@
         facets.forEach(facet => {
             const start = facet.index.byteStart; const end = facet.index.byteEnd;
             if (start > lastByteIndex) html += escapeHtml(decoder.decode(textBytes.slice(lastByteIndex, start)));
+            
             const linkText = escapeHtml(decoder.decode(textBytes.slice(start, end)));
             let url = '#'; let isLink = false;
+            
             if (facet.features) {
                 const linkFeature = facet.features.find(f => f.$type === 'app.bsky.richtext.facet#link');
                 if (linkFeature) { url = linkFeature.uri; isLink = true; }
             }
+
             if (isLink) {
                 const ytId = extractYoutubeId(url);
                 if (ytId) url = `https://www.youtube.com/watch?v=${ytId}`;
@@ -204,8 +197,6 @@
         } catch (error) { container.innerHTML += `<div class="loading">エラー: ${error.message}</div>`; }
     }
     fetchBlueskyPosts();
-
-    // モーダル制御のJSも削除しました
 </script>
 </body>
 </html>
