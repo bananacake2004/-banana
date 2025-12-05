@@ -3,50 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bluesky Feed V6</title>
+    <title>Bluesky Feed V8</title>
     <style>
-        /* Ver 6.0 Final Code */
+        /* Ver 8.0 Final Code */
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-main: #0b0f14; --text-sub: #42576c; --accent-blue: #0085ff; --border-color: #e1e3e5; --hover-bg: #f5f7f9; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; color: var(--text-main); }
-        /* Google Sitesで背景を透明にする場合は次の行のコメントを外す */
         /* body { background-color: transparent; padding: 10px 0; } */
+        
         .container { max-width: 600px; margin: 0 auto; position: relative; }
         .version-tag { position: absolute; top: -20px; right: 0; font-size: 10px; color: #aaa; }
         .post-card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; margin-bottom: 12px; display: flex; gap: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background-color: #eee; flex-shrink: 0; }
         .content { flex: 1; min-width: 0; }
+        
         .header { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; flex-wrap: wrap; }
         .display-name { font-weight: 700; font-size: 15px; color: var(--text-main); text-decoration: none; }
         .handle { color: var(--text-sub); font-size: 14px; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .time { color: var(--text-sub); font-size: 14px; white-space: nowrap; }
+        
         .text { font-size: 15px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 10px; }
         .text a { color: var(--accent-blue); text-decoration: none; } .text a:hover { text-decoration: underline; }
         
-        /* 画像スタイルの変更点：高さ制限とトリミングを追加 */
+        /* 画像：コンパクト表示（高さ制限） */
         .post-image {
-            margin-top: 8px;
-            border-radius: 8px;
-            width: 100%;            /* 横幅は枠いっぱい */
-            max-height: 350px;      /* 高さは最大350pxまで */
-            object-fit: cover;      /* 枠に合わせて良い感じでトリミング */
-            border: 1px solid var(--border-color);
-            cursor: zoom-in;
-            display: block;
+            margin-top: 8px; border-radius: 8px; width: 100%; height: 220px; object-fit: cover;
+            border: 1px solid var(--border-color); cursor: zoom-in; display: block;
         }
         
-        .embed-card { margin-top: 10px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; text-decoration: none; color: inherit; display: block; transition: background-color 0.2s; background-color: var(--card-bg); }
+        /* リンクカード */
+        .embed-card { margin-top: 10px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; text-decoration: none; color: inherit; display: block; transition: background-color 0.2s; background-color: var(--card-bg); min-height: 80px; }
         .embed-card:hover { background-color: var(--hover-bg); }
         .embed-thumb { width: 100%; height: 160px; object-fit: cover; display: block; border-bottom: 1px solid var(--border-color); }
         .embed-info { padding: 10px 12px; }
         .embed-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
         .embed-desc { font-size: 13px; color: var(--text-sub); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-bottom: 4px; }
         .embed-host { font-size: 12px; color: var(--text-sub); }
+        
+        /* 読み込み中のプレースホルダー */
+        .card-loading { padding: 12px; font-size: 12px; color: #999; text-align: center; border: 1px dashed #ddd; border-radius: 8px; margin-top: 10px; }
+
         .quote-card { margin-top: 10px; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; background-color: var(--card-bg); }
         .quote-header { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
         .quote-avatar { width: 20px; height: 20px; border-radius: 50%; }
         .quote-name { font-weight: 700; font-size: 13px; } .quote-handle { font-size: 13px; color: var(--text-sub); } .quote-text { font-size: 14px; }
+        
         .loading { text-align: center; color: var(--text-sub); margin-top: 20px; }
-        /* Modal */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); align-items: center; justify-content: center; opacity: 0; transition: opacity 0.4s; backdrop-filter: blur(4px); }
         .modal.show { display: flex; opacity: 1; }
         .modal-content { max-width: 93%; max-height: 93%; object-fit: contain; border-radius: 4px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); transform: scale(0.92) translateY(30px); transition: transform 0.4s; }
@@ -56,7 +57,7 @@
 </head>
 <body>
 <div class="container" id="feed-container">
-    <div class="version-tag">Ver 6.0 (Fixes)</div>
+    <div class="version-tag">Ver 8.0 (Universal Cards)</div>
     <div class="loading">読み込み中...</div>
 </div>
 <div id="image-modal" class="modal"><span class="close-btn">&times;</span><img class="modal-content" id="expanded-image"></div>
@@ -64,33 +65,62 @@
     const HANDLE = 'katsuobushi-kawa.bsky.social';
     const API_URL = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${HANDLE}&filter=posts_no_replies&limit=10`;
 
-    // URLをリンクに変換する関数（強化版）
     function linkify(text) {
         if (!text) return '';
-        // HTMLエスケープ
         const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-        
-        // 強化された正規表現：https://, http://, www., youtu.be などに対応
-        // 文末の句読点などをURLに含めないように調整
         const urlRegex = /((?:https?:\/\/|www\.|youtu\.be\/)[^\s　]+?)(?=[.,;!?]?(?:\s|　|$))/g;
-        
         return escaped.replace(urlRegex, function(url) {
             let href = url;
-            // www. や youtu.be で始まる場合は https:// を補完
-            if (!url.startsWith('http')) {
-                href = 'https://' + url;
-            }
+            if (!url.startsWith('http')) { href = 'https://' + url; }
             return `<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
         });
     }
 
+    // 汎用カード生成（外部API使用）
+    async function fetchOgData(url, targetElementId) {
+        try {
+            // microlink.ioのAPIを使ってメタデータを取得
+            const apiUrl = `https://api.microlink.io?url=${encodeURIComponent(url)}`;
+            const res = await fetch(apiUrl);
+            const json = await res.json();
+            const data = json.data;
+            
+            const target = document.getElementById(targetElementId);
+            if (!target || json.status !== 'success') {
+                if(target) target.style.display = 'none'; // 失敗したら消す
+                return;
+            }
+
+            const thumbHtml = data.image ? `<img src="${data.image.url}" class="embed-thumb" alt="thumbnail">` : '';
+            const desc = data.description || '';
+            const title = data.title || url;
+            const host = new URL(url).hostname;
+
+            target.innerHTML = `
+                <a href="${url}" target="_blank" class="embed-card" style="margin-top:0;">
+                    ${thumbHtml}
+                    <div class="embed-info">
+                        <div class="embed-title">${title}</div>
+                        <div class="embed-desc">${desc}</div>
+                        <div class="embed-host">${host}</div>
+                    </div>
+                </a>
+            `;
+            target.className = ''; // loadingクラスを消す
+
+        } catch (e) {
+            console.error('Card fetch failed', e);
+            const t = document.getElementById(targetElementId);
+            if(t) t.style.display = 'none';
+        }
+    }
+
     function renderEmbed(embed) {
-        if (!embed) return '';
+        if (!embed) return null; // 何もない場合はnullを返す
         if (embed.$type === 'app.bsky.embed.external') {
             const ext = embed.external;
             const thumb = ext.thumb ? `<img src="${ext.thumb}" class="embed-thumb">` : '';
-            let hostname = 'link';
-            try { hostname = new URL(ext.uri).hostname; } catch(e) {}
+            let hostname = 'link'; try { hostname = new URL(ext.uri).hostname; } catch(e) {}
             return `<a href="${ext.uri}" target="_blank" class="embed-card">${thumb}<div class="embed-info"><div class="embed-title">${ext.title||'No Title'}</div><div class="embed-desc">${ext.description||''}</div><div class="embed-host">${hostname}</div></div></a>`;
         }
         if (embed.$type === 'app.bsky.embed.record') {
@@ -105,9 +135,11 @@
             if(embed.media.images) embed.media.images.forEach(img => {
                 media += `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="post-image" alt="post image">`;
             });
-            return media + renderEmbed(embed.record);
+            // 引用部分は再帰呼び出し
+            const recHtml = renderEmbed(embed.record);
+            return media + (recHtml || '');
         }
-        return '';
+        return null;
     }
 
     async function fetchBlueskyPosts() {
@@ -121,7 +153,7 @@
             container.innerHTML = '';
             if(versionTag) container.appendChild(versionTag);
 
-            data.feed.forEach(item => {
+            data.feed.forEach((item, index) => {
                 const post = item.post;
                 const author = post.author;
                 const record = post.record;
@@ -134,13 +166,30 @@
                 let imagesHtml = '';
                 if (post.embed && post.embed.images) {
                     post.embed.images.forEach(img => {
-                        // 画像には高画質版のURLも仕込んでおく
                         imagesHtml += `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="post-image" alt="post image">`;
                     });
                 }
 
-                const embedHtml = renderEmbed(post.embed);
-                // 本文をリンク化する
+                let embedHtml = renderEmbed(post.embed);
+                let extraCardId = null;
+                let extraCardUrl = null;
+
+                // Native Embedがない場合、テキスト内のURLを探してカード化を試みる
+                if (!embedHtml) {
+                    const urlRegex = /(https?:\/\/[^\s　]+)/;
+                    const match = record.text.match(urlRegex);
+                    if (match) {
+                        extraCardUrl = match[0];
+                        // YouTubeならサムネイル画像を即時生成（高速化のため）
+                        if (extraCardUrl.match(/(youtube\.com|youtu\.be)/)) {
+                            // YouTubeロジックはV7同様（ここでは簡略化してAPI fetchに任せるか、既存ロジックを使う）
+                            // 統一感のため今回はAPI fetcherに任せますが、読み込みラグ解消のためLoadingを表示
+                        }
+                        extraCardId = `card-load-${index}`;
+                        embedHtml = `<div id="${extraCardId}" class="card-loading">リンク情報を読み込み中...</div>`;
+                    }
+                }
+
                 const formattedText = linkify(record.text);
 
                 card.innerHTML = `
@@ -153,10 +202,15 @@
                         </div>
                         <div class="text">${formattedText}</div>
                         ${imagesHtml}
-                        ${embedHtml}
+                        ${embedHtml || ''}
                     </div>
                 `;
                 container.appendChild(card);
+
+                // 後追いでカード情報を取得
+                if (extraCardId && extraCardUrl) {
+                    fetchOgData(extraCardUrl, extraCardId);
+                }
             });
         } catch (error) {
             container.innerHTML += `<div class="loading">エラー: ${error.message}</div>`;
