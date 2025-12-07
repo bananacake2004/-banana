@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Bluesky Feed (ver29.0)</title>
+<title>My Bluesky Feed (ver30.0)</title>
 <style>
     /* --------------------------------------------------
        基本設定
@@ -63,6 +63,7 @@
         font-size: 1rem; margin-bottom: 12px; 
         white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
     }
+    /* リンクの色設定（重要） */
     .post-body a { color: #1d9bf0; text-decoration: none; }
     .post-body a:hover { text-decoration: underline; }
 
@@ -190,15 +191,14 @@
                     `;
                 }
 
-                // --- 2. リンク化と本文処理 ---
-                // テキスト内のURLをリンクに変換
+                // --- 2. リンク化と本文処理 (修正版) ---
+                // テキスト内のURLを強力にリンク変換
                 const bodyText = linkify(post.record.text);
                 
-                // 長文判定（簡易的に文字数で判定し、JSでクラス制御）
+                // 長文判定
                 let bodyHtml = `<div class="post-body">${bodyText}</div>`;
                 let moreBtnHtml = '';
                 
-                // 300文字以上なら折りたたむ（ver24.0のMoreボタン機能を再現）
                 if (post.record.text.length > 300) {
                     bodyHtml = `<div class="post-body text-truncated" id="body-${safeId}">${bodyText}</div>`;
                     moreBtnHtml = `<button class="read-more-btn" onclick="expandText('body-${safeId}', this)">...もっと見る</button>`;
@@ -227,7 +227,6 @@
                 `;
                 container.appendChild(article);
                 
-                // もっと見るボタンを表示（CSSで初期非表示にしているため）
                 if(moreBtnHtml) {
                     article.querySelector('.read-more-btn').style.display = 'inline-block';
                 }
@@ -258,21 +257,30 @@
         btn.style.display = 'none';
     }
 
-    // リンク化（URLをaタグに変換）
+    // 【修正版】強力なリンク化関数
     function linkify(text) {
         if (!text) return "";
-        let escaped = escapeHtml(text);
-        // URL
-        escaped = escaped.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
-        // 改行
-        return escaped.replace(/\n/g, '<br>');
+        
+        // 1. まずHTMLエスケープ (XSS対策)
+        let replacedText = text.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]);
+
+        // 2. URL正規表現 (http/https)
+        // (\b(https?): ... ) のパターンで、末尾のドットやカンマをURLに含めないように制御
+        const urlRegex = /(\b(https?):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+        
+        replacedText = replacedText.replace(urlRegex, function(url) {
+            return `<a href="${url}" target="_blank" rel="noopener">${url}</a>`;
+        });
+
+        // 3. 改行をbrに
+        return replacedText.replace(/\n/g, '<br>');
     }
 
-    // メディア描画（画像・外部リンク・引用）
+    // メディア描画
     function renderEmbed(embed) {
         if (!embed) return "";
 
-        // 1. 画像 (images)
+        // 1. 画像
         if (embed.images) {
             let count = embed.images.length;
             let html = `<div class="post-images" data-count="${count}">`;
@@ -283,7 +291,7 @@
             return html;
         }
 
-        // 2. 外部リンクカード (external)
+        // 2. 外部リンクカード
         if (embed.external) {
             const ext = embed.external;
             return `
@@ -298,12 +306,12 @@
             `;
         }
 
-        // 3. 引用リポスト (record)
-        if (embed.record && embed.record.value) { // record.value がある場合
+        // 3. 引用リポスト
+        if (embed.record && embed.record.value) { 
              const rec = embed.record.value;
              const author = embed.record.author || { handle: 'unknown', avatar: '' };
              return `
-                <div class="quote-card">
+                <div class="quote-card" onclick="window.open('https://bsky.app/profile/${author.handle}/post/${embed.record.uri.split('/').pop()}', '_blank')">
                     <div class="quote-user">
                         <img src="${author.avatar || 'https://via.placeholder.com/20'}" alt="">
                         <span>${escapeHtml(author.displayName || author.handle)}</span>
@@ -313,9 +321,8 @@
              `;
         }
         
-        // 4. 画像付き引用など (recordWithMedia)
+        // 4. 画像付き引用など
         if (embed.$type === 'app.bsky.embed.recordWithMedia') {
-            // メディアと引用の両方を表示
             return renderEmbed(embed.media) + renderEmbed(embed.record);
         }
 
