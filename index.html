@@ -3,305 +3,240 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fixed ver25.0 Thread View</title>
+<title>My Bluesky Feed (Infinite)</title>
 <style>
     /* --------------------------------------------------
        基本設定
        -------------------------------------------------- */
     body, html {
-        margin: 0;
-        padding: 0;
+        margin: 0; padding: 0;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        color: #0f1419;
-        line-height: 1.6;
-        overflow-x: hidden; 
-        background-color: #f9f9f9;
-        scroll-behavior: smooth; /* スムーズスクロール */
+        color: #0f1419; line-height: 1.6;
+        background-color: #f9f9f9; scroll-behavior: smooth;
     }
-
-    /* レイアウトコンテナ */
     .container {
-        display: flex;
-        flex-wrap: wrap;
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 20px;
-        gap: 20px;
-        position: relative;
+        display: flex; flex-wrap: wrap; max-width: 1200px;
+        margin: 0 auto; padding: 20px; gap: 20px; position: relative;
     }
-
-    /* メインコンテンツエリア */
     .main-content {
-        flex: 1;
-        min-width: 0;
-        max-width: 600px; /* タイムラインっぽく幅制限 */
-        margin: 0 auto;   /* 中央寄せ */
+        flex: 1; min-width: 0; max-width: 600px; margin: 0 auto;
     }
 
-    /* --------------------------------------------------
-       投稿カードのデザイン
-       -------------------------------------------------- */
+    /* --- カードデザイン --- */
     .card {
-        background: #fff;
-        border: 1px solid #cfd9de; /* Twitterっぽい薄い枠線 */
-        border-radius: 16px;
-        padding: 16px;
-        margin-bottom: 24px;
+        background: #fff; border: 1px solid #cfd9de; border-radius: 16px;
+        padding: 16px; margin-bottom: 24px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.02);
-        transition: background-color 1s ease; /* ハイライト用 */
+        transition: background-color 1s ease;
     }
+    .card.highlight { background-color: #fff8c5; transition: none; }
 
-    /* スクロール移動先としてハイライトするためのクラス */
-    .card.highlight {
-        background-color: #fff8c5; /* 一瞬黄色くなる */
-        transition: none;
-    }
-
-    /* --- 親投稿（グレー枠） --- */
+    /* 親投稿（グレー枠） */
     .parent-post-preview {
-        display: block; /* リンクとして機能させる */
-        text-decoration: none;
-        background-color: #f7f9f9;
-        border: 1px solid #eff3f4;
-        border-radius: 12px;
-        padding: 12px;
-        margin-bottom: 12px;
-        font-size: 0.9rem;
-        color: #536471;
-        position: relative;
-        transition: background-color 0.2s;
+        display: block; text-decoration: none;
+        background-color: #f7f9f9; border: 1px solid #eff3f4;
+        border-radius: 12px; padding: 12px; margin-bottom: 12px;
+        font-size: 0.9rem; color: #536471; cursor: pointer;
     }
-    
-    .parent-post-preview:hover {
-        background-color: #eff1f1;
-    }
-
+    .parent-post-preview:hover { background-color: #eff1f1; }
     .parent-post-preview::before {
-        content: "返信先: 自分";
-        display: block;
-        font-size: 0.75rem;
-        color: #536471;
-        margin-bottom: 4px;
-        font-weight: bold;
+        content: "返信先: 自分 (直前の投稿)"; display: block;
+        font-size: 0.75rem; color: #536471; margin-bottom: 4px; font-weight: bold;
     }
 
-    /* --- 投稿ヘッダー（アイコン・名前・フォローボタン） --- */
-    .post-header {
-        display: flex;
-        align-items: center; /* 垂直中央揃え */
-        margin-bottom: 12px;
-    }
-
-    .user-avatar {
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        object-fit: cover;
-        margin-right: 12px;
-        background-color: #ccc; /* 画像がない場合のダミー色 */
-    }
-
-    .user-info {
-        flex: 1; /* 余ったスペースを埋める */
-        line-height: 1.2;
-    }
-
-    .user-name {
-        font-weight: bold;
-        font-size: 1rem;
-        display: block;
-    }
-
-    .user-id {
-        color: #536471;
-        font-size: 0.9rem;
-    }
-
+    /* ヘッダー・本文・画像 */
+    .post-header { display: flex; align-items: center; margin-bottom: 12px; }
+    .user-avatar { width: 48px; height: 48px; border-radius: 50%; margin-right: 12px; object-fit: cover; background: #eee; }
+    .user-info { flex: 1; line-height: 1.2; }
+    .user-name { font-weight: bold; font-size: 1rem; display: block; }
+    .user-id { color: #536471; font-size: 0.9rem; }
     .follow-btn {
-        background-color: #0f1419;
-        color: #fff;
-        border: none;
-        border-radius: 9999px; /* 完全な丸み */
-        padding: 6px 16px;
-        font-weight: bold;
-        font-size: 0.9rem;
-        cursor: pointer;
-        transition: opacity 0.2s;
+        background-color: #0f1419; color: #fff; border: none; border-radius: 9999px;
+        padding: 6px 16px; font-weight: bold; font-size: 0.9rem; cursor: pointer; text-decoration: none;
     }
+    .post-body { font-size: 1rem; margin-bottom: 12px; white-space: pre-wrap; word-break: break-word; }
+    .post-images { display: grid; gap: 4px; border-radius: 12px; overflow: hidden; margin-top: 10px; }
+    .post-images img { width: 100%; height: auto; display: block; }
 
-    .follow-btn:hover {
-        opacity: 0.8;
+    /* 読み込みボタン・インジケーター */
+    #loading-indicator { text-align: center; padding: 20px; color: #666; display: none; }
+    .load-more-btn {
+        display: block; width: 100%; padding: 15px; margin-top: 20px;
+        background: #1d9bf0; color: white; border: none; border-radius: 30px;
+        font-size: 1rem; font-weight: bold; cursor: pointer; text-align: center;
     }
-    
-    .follow-btn.following {
-        background-color: #fff;
-        color: #0f1419;
-        border: 1px solid #cfd9de;
-    }
+    .load-more-btn:hover { background: #1a8cd8; }
+    .load-more-btn:disabled { background: #ccc; cursor: not-allowed; }
 
-    /* --- 本文とMoreボタン --- */
-    .post-body {
-        font-size: 1rem;
-        margin-bottom: 12px;
-        white-space: pre-wrap; /* 改行を反映 */
-    }
-
-    .more-content {
-        display: none;
-        opacity: 0;
-        transition: opacity 0.5s ease;
-    }
-
-    .more-content.is-open {
-        display: block;
-        animation: fadeIn 0.5s forwards;
-    }
-
-    @keyframes fadeIn {
-        to { opacity: 1; }
-    }
-
-    .more-btn {
-        color: #1d9bf0;
-        background: none;
-        border: none;
-        cursor: pointer;
-        padding: 0;
-        font-size: 0.95rem;
-    }
-    .more-btn:hover { text-decoration: underline; }
-
-
-    /* --------------------------------------------------
-       サイドバー (Sticky)
-       -------------------------------------------------- */
+    /* サイドバー */
     .sticky-sidebar {
-        width: 300px;
-        position: -webkit-sticky;
-        position: sticky;
-        top: 20px;
-        height: fit-content;
-        background: #fff;
-        padding: 20px;
-        border-radius: 16px;
+        width: 300px; position: sticky; top: 20px; height: fit-content;
+        background: #fff; padding: 20px; border-radius: 16px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.05);
     }
-
     @media (max-width: 768px) {
         .container { flex-direction: column; }
         .sticky-sidebar { width: 100%; position: static; }
         .main-content { max-width: 100%; }
     }
-
 </style>
 </head>
 <body>
 
 <div class="container">
-    
     <main class="main-content">
-
-        <article class="card" id="post-001">
-            <div class="post-header">
-                <img src="https://placehold.co/100" alt="Icon" class="user-avatar">
-                <div class="user-info">
-                    <span class="user-name">Gemini User</span>
-                    <span class="user-id">@gemini_fan</span>
-                </div>
-                <button class="follow-btn">フォロー</button>
+        <div id="feed-container">
             </div>
-            <div class="post-body">
-                <p>これが最初の投稿です。ここからスレッドが始まります。<br>
-                この投稿には ID="post-001" が振られています。</p>
-            </div>
-        </article>
-
-        <article class="card" id="post-002">
-            <div class="post-header">
-                <img src="https://placehold.co/100/orange/white" alt="Icon" class="user-avatar">
-                <div class="user-info">
-                    <span class="user-name">Tanaka</span>
-                    <span class="user-id">@tnk_daily</span>
-                </div>
-                <button class="follow-btn">フォロー</button>
-            </div>
-            <div class="post-body">
-                <p>これは関係ない別の人の投稿です。スクロールの距離を稼ぐために置いてあります。</p>
-                <div style="height: 100px; background:#eee;">画像エリア想定</div>
-            </div>
-        </article>
-
-        <article class="card" id="post-003">
-            
-            <a href="#post-001" class="parent-post-preview">
-                これは親の投稿の抜粋テキストです... クリックすると親（post-001）へ移動します。
-            </a>
-
-            <div class="post-header">
-                <img src="https://placehold.co/100" alt="Icon" class="user-avatar">
-                <div class="user-info">
-                    <span class="user-name">Gemini User</span>
-                    <span class="user-id">@gemini_fan</span>
-                </div>
-                <button class="follow-btn following">フォロー中</button>
-            </div>
-
-            <div class="post-body">
-                <p>ここが「自分への返信」の本文です。</p>
-                <p>上のグレーの枠をクリックしてみてください。スルスルっと上にスクロールして戻るはずです。</p>
-                
-                <div class="more-content" id="more-content-1">
-                    <p>隠されていた長文の続きです。デザインの一貫性を保ちつつ、新しい機能を追加しました。</p>
-                </div>
-                <button class="more-btn" onclick="toggleMore('more-content-1', this)">...もっと見る</button>
-            </div>
-        </article>
-
-        <div style="height: 500px;"></div>
-
+        
+        <div id="loading-indicator">読み込み中...</div>
+        <button id="load-more-btn" class="load-more-btn" style="display:none;">もっと見る</button>
     </main>
 
     <aside class="sticky-sidebar">
-        <h3>トレンド</h3>
+        <h3>@katsuobushi-kawa</h3>
+        <p>Blueskyの過去ログビューア</p>
         <ul>
-            <li>#GitHubPages</li>
-            <li>#WebDesign</li>
-            <li>#GeminiHelp</li>
+            <li><a href="https://bsky.app/profile/katsuobushi-kawa.bsky.social" target="_blank">Bluesky公式へ</a></li>
         </ul>
-        <div style="margin-top: 20px; font-size: 0.85rem; color: #888;">
-            © 2025 My App
-        </div>
     </aside>
-
 </div>
 
 <script>
-    // Moreボタンの開閉ロジック
-    function toggleMore(contentId, btn) {
-        const content = document.getElementById(contentId);
-        content.classList.add('is-open');
-        btn.style.display = 'none'; // ボタンを消す
-    }
+    const ACTOR = "katsuobushi-kawa.bsky.social";
+    // 1回に取得する件数（最大100まで設定可能）
+    const LIMIT = 30; 
+    let currentCursor = null; // 次のページを取得するためのキー
+    let isFetching = false;
 
-    // アンカーリンククリック時のハイライト演出
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-        anchor.addEventListener('click', function (e) {
-            e.preventDefault();
-            const targetId = this.getAttribute('href').substring(1);
-            const targetElement = document.getElementById(targetId);
-
-            if (targetElement) {
-                // スクロール実行
-                targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-                // 一瞬光らせる演出
-                targetElement.classList.add('highlight');
-                setTimeout(() => {
-                    targetElement.classList.remove('highlight');
-                }, 1000); // 1秒後に元の色に戻す
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchPosts(); // 初回読み込み
+        
+        // 「もっと見る」ボタンの設定
+        document.getElementById('load-more-btn').addEventListener('click', () => {
+            if (!isFetching && currentCursor) {
+                fetchPosts(currentCursor);
             }
         });
     });
+
+    async function fetchPosts(cursor = null) {
+        if (isFetching) return;
+        isFetching = true;
+
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const loadMoreBtn = document.getElementById('load-more-btn');
+        const container = document.getElementById('feed-container');
+
+        loadingIndicator.style.display = 'block';
+        loadMoreBtn.style.display = 'none';
+
+        // URL作成（カーソルがある場合はパラメータに追加）
+        let url = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${ACTOR}&filter=posts_with_replies&limit=${LIMIT}`;
+        if (cursor) {
+            url += `&cursor=${cursor}`;
+        }
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error("API取得エラー");
+            const data = await response.json();
+
+            // 投稿生成ループ
+            data.feed.forEach(item => {
+                const post = item.post;
+                const reply = item.reply;
+                const article = document.createElement('article');
+                article.className = 'card';
+                
+                // ID生成
+                const safeId = "post-" + post.uri.split('/').pop(); 
+                article.id = safeId;
+
+                // 自分への返信判定
+                let parentHtml = '';
+                if (reply && reply.parent && reply.parent.author.did === post.author.did) {
+                    const parentId = "post-" + reply.parent.uri.split('/').pop();
+                    const parentText = reply.parent.record.text || "画像/メディア";
+                    parentHtml = `
+                        <a href="#${parentId}" class="parent-post-preview" onclick="handleJump(event, '${parentId}', '${reply.parent.uri}')">
+                            ${escapeHtml(parentText).substring(0, 60)}...
+                        </a>
+                    `;
+                }
+
+                // 画像処理
+                let imagesHtml = '';
+                if (post.embed && post.embed.images) {
+                    imagesHtml = `<div class="post-images">`;
+                    post.embed.images.forEach(img => {
+                        imagesHtml += `<img src="${img.thumb}" alt="${img.alt || ''}">`;
+                    });
+                    imagesHtml += `</div>`;
+                }
+
+                // カードHTML
+                article.innerHTML = `
+                    ${parentHtml}
+                    <div class="post-header">
+                        <img src="${post.author.avatar || 'https://via.placeholder.com/50'}" alt="Icon" class="user-avatar">
+                        <div class="user-info">
+                            <span class="user-name">${escapeHtml(post.author.displayName || post.author.handle)}</span>
+                            <span class="user-id">@${post.author.handle}</span>
+                        </div>
+                        <a href="https://bsky.app/profile/${post.author.handle}" target="_blank" class="follow-btn">フォロー</a>
+                    </div>
+                    <div class="post-body">
+                        ${formatText(post.record.text)}
+                        ${imagesHtml}
+                    </div>
+                    <div style="font-size:0.8rem; color:#888;">
+                        ${new Date(post.record.createdAt).toLocaleString()}
+                    </div>
+                `;
+                container.appendChild(article);
+            });
+
+            // 次のページのカーソルを保存
+            if (data.cursor) {
+                currentCursor = data.cursor;
+                loadMoreBtn.style.display = 'block'; // 次があるならボタン表示
+            } else {
+                currentCursor = null;
+                // これ以上ない場合の表示（任意）
+            }
+
+        } catch (error) {
+            console.error(error);
+            container.insertAdjacentHTML('beforeend', `<p style="color:red;">読み込みエラー: ${error.message}</p>`);
+        } finally {
+            isFetching = false;
+            loadingIndicator.style.display = 'none';
+        }
+    }
+
+    // --- ユーティリティ関数 ---
+    function escapeHtml(text) {
+        if (!text) return "";
+        return text.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]);
+    }
+
+    function formatText(text) {
+        return escapeHtml(text).replace(/\n/g, '<br>');
+    }
+
+    function handleJump(e, targetId, bskyUri) {
+        e.preventDefault();
+        const targetEl = document.getElementById(targetId);
+        if (targetEl) {
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            targetEl.classList.add('highlight');
+            setTimeout(() => targetEl.classList.remove('highlight'), 1500);
+        } else {
+            const parts = bskyUri.split('/');
+            const postId = parts.pop();
+            window.open(`https://bsky.app/profile/${ACTOR}/post/${postId}`, '_blank');
+        }
+    }
 </script>
 
 </body>
