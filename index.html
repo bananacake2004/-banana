@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Bluesky Feed (ver36.0)</title>
+<title>My Bluesky Feed (ver37.0)</title>
 <style>
     /* --------------------------------------------------
        基本設定
@@ -87,11 +87,11 @@
     }
     .link-card:hover { background-color: #f7f9f9; }
     
-    /* 大きな画像がある場合 (YouTubeなど) */
+    /* 大きな画像がある場合 */
     .link-card.has-large-image { display: block; }
     .link-card.has-large-image .link-card-img { width: 100%; height: 200px; object-fit: cover; display: block; border-bottom: 1px solid #cfd9de; }
     
-    /* 画像がない/Faviconの場合 (横並び) */
+    /* 画像がない/Faviconの場合 */
     .link-card-icon { width: 80px; height: 80px; object-fit: contain; padding: 15px; background: #f7f9f9; border-right: 1px solid #cfd9de; flex-shrink: 0;}
     
     .link-card-content { padding: 12px; flex: 1; min-width: 0;}
@@ -192,7 +192,7 @@
                 // 3. メディア（既存のEmbed）
                 let mediaHtml = renderEmbed(post.embed);
 
-                // 4. 重複防止チェック
+                // 4. 重複防止チェック（ここを修正）
                 const alreadyHasExternalCard = isExternalEmbedPresent(post.embed);
                 
                 // Embedカードがない場合のみ、Facetsからカードを生成する
@@ -245,13 +245,21 @@
 
     // --- 機能関数 ---
 
-    // 外部リンクカードが既に存在するかチェック
+    // ★修正ポイント：カードの二重表示を防ぐためのチェック関数
     function isExternalEmbedPresent(embed) {
         if (!embed) return false;
-        if (embed.$type === 'app.bsky.embed.external') return true;
-        if (embed.$type === 'app.bsky.embed.recordWithMedia') {
+        
+        // 文字列比較ではなく、プロパティの有無で判断する（#viewなどが付いても対応できる）
+        if (embed.external) return true;
+
+        // 念のためタイプ名に 'external' が含まれているかもチェック
+        if (embed.$type && embed.$type.includes('app.bsky.embed.external')) return true;
+
+        // 複合型（RecordWithMedia）の場合、その中身（media）を再帰的にチェック
+        if (embed.media) {
             return isExternalEmbedPresent(embed.media);
         }
+        
         return false;
     }
 
@@ -286,7 +294,7 @@
         return html.replace(/\n/g, '<br>');
     }
 
-    // ★修正版：カード生成ロジック★
+    // カード生成ロジック (YouTube / Favicon)
     function createExtraLinkCard(facets) {
         let html = '';
         let foundLink = false;
@@ -298,9 +306,10 @@
             if (feat) {
                 foundLink = true;
                 const url = feat.uri;
-                const hostname = new URL(url).hostname;
-                
-                // ★YouTube判定の強化 (Live / Shorts / youtu.be に対応)
+                let hostname = "external-link";
+                try { hostname = new URL(url).hostname; } catch(e){}
+
+                // YouTube判定 (Live / Shorts / youtu.be に対応)
                 const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|live\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
                 
                 if (ytMatch) {
@@ -316,7 +325,7 @@
                         </a>
                     `;
                 } else {
-                    // その他のリンク (Favicon利用)
+                    // その他のリンク
                     const faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
                     html += `
                         <a href="${url}" target="_blank" rel="noopener" class="link-card">
@@ -388,9 +397,14 @@
              `;
         }
         // 複合
-        if (embed.$type === 'app.bsky.embed.recordWithMedia') {
-            return renderEmbed(embed.media) + renderEmbed(embed.record);
+        if (embed.media && embed.record) {
+             return renderEmbed(embed.media) + renderEmbed(embed.record);
         }
+        // $typeチェックでも複合を拾う
+        if (embed.$type && embed.$type.includes('recordWithMedia')) {
+             return renderEmbed(embed.media) + renderEmbed(embed.record);
+        }
+
         return "";
     }
 
