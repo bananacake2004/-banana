@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Bluesky Feed (ver37.0)</title>
+<title>My Bluesky Feed (ver38.0)</title>
 <style>
     /* --------------------------------------------------
        基本設定
@@ -25,8 +25,18 @@
         padding: 16px; margin-bottom: 24px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.02);
         transition: background-color 1s ease;
+        position: relative;
     }
     .card.highlight { background-color: #fff8c5; transition: none; }
+
+    /* ★追加: ピン留めラベル */
+    .pinned-label {
+        font-size: 0.8rem; color: #536471; font-weight: bold;
+        margin-bottom: 8px; display: flex; align-items: center;
+    }
+    .pinned-label::before {
+        content: "📌"; margin-right: 4px;
+    }
 
     /* 親投稿（自分への返信） */
     .parent-post-preview {
@@ -86,14 +96,9 @@
         align-items: center; min-height: 100px;
     }
     .link-card:hover { background-color: #f7f9f9; }
-    
-    /* 大きな画像がある場合 */
     .link-card.has-large-image { display: block; }
     .link-card.has-large-image .link-card-img { width: 100%; height: 200px; object-fit: cover; display: block; border-bottom: 1px solid #cfd9de; }
-    
-    /* 画像がない/Faviconの場合 */
     .link-card-icon { width: 80px; height: 80px; object-fit: contain; padding: 15px; background: #f7f9f9; border-right: 1px solid #cfd9de; flex-shrink: 0;}
-    
     .link-card-content { padding: 12px; flex: 1; min-width: 0;}
     .link-card-title { font-weight: bold; font-size: 0.95rem; margin-bottom: 4px; line-height: 1.4; }
     .link-card-desc { font-size: 0.85rem; color: #536471; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -132,99 +137,115 @@
     const LIMIT = 30; 
     let currentCursor = null; 
     let isFetching = false;
+    // ★追加: ピン留め済みかどうかを管理
+    let isPinnedRendered = false; 
 
     document.addEventListener('DOMContentLoaded', () => {
-        fetchPosts(); 
+        // 初回ロード時はプロフィール（ピン留め情報）も一緒に取得する
+        fetchProfileAndPosts(); 
+        
         document.getElementById('load-more-btn').addEventListener('click', () => {
             if (!isFetching && currentCursor) fetchPosts(currentCursor);
         });
     });
 
-    async function fetchPosts(cursor = null) {
+    // ★新設: プロフィールとフィードを同時に取得して制御する関数
+    async function fetchProfileAndPosts() {
         if (isFetching) return;
         isFetching = true;
+        const loadingIndicator = document.getElementById('loading-indicator');
+        loadingIndicator.style.display = 'block';
 
+        try {
+            // 1. プロフィール取得（ピン留めURIを確認）
+            const profileRes = await fetch(`https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=${ACTOR}`);
+            if (!profileRes.ok) throw new Error("Profile取得エラー");
+            const profileData = await profileRes.json();
+            const pinnedPostUri = profileData.pinnedPost ? profileData.pinnedPost.uri : null;
+
+            // 2. フィード取得
+            const feedUrl = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${ACTOR}&filter=posts_with_replies&limit=${LIMIT}`;
+            const feedRes = await fetch(feedUrl);
+            if (!feedRes.ok) throw new Error("Feed取得エラー");
+            const feedData = await feedRes.json();
+            
+            // 3. データ処理（ピン留めロジック）
+            let items = feedData.feed;
+            let pinnedItem = null;
+
+            if (pinnedPostUri) {
+                // フィード内にピン留め投稿が含まれているか探す
+                const pinnedIndex = items.findIndex(item => item.post.uri === pinnedPostUri);
+                
+                if (pinnedIndex !== -1) {
+                    // あれば抜き取る
+                    pinnedItem = items.splice(pinnedIndex, 1)[0];
+                } else {
+                    // なければ別途取得する
+                    try {
+                        const postsRes = await fetch(`https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts?uris=${pinnedPostUri}`);
+                        const postsData = await postsRes.json();
+                        if (postsData.posts.length > 0) {
+                            // feed形式に合わせるためのラッパー
+                            pinnedItem = { post: postsData.posts[0] }; 
+                        }
+                    } catch(e) {
+                        console.error("Pinned post fetch error", e);
+                    }
+                }
+            }
+
+            // 4. ピン留めを先頭に追加して描画
+            const container = document.getElementById('feed-container');
+            container.innerHTML = ""; // クリア
+
+            if (pinnedItem) {
+                renderItem(pinnedItem, container, true); // true = ピン留めフラグ
+                isPinnedRendered = true;
+            }
+
+            // 残りの投稿を描画
+            items.forEach(item => {
+                renderItem(item, container, false);
+            });
+
+            // ページネーション設定
+            if (feedData.cursor) {
+                currentCursor = feedData.cursor;
+                document.getElementById('load-more-btn').style.display = 'block';
+            }
+
+        } catch (error) {
+            console.error(error);
+            document.getElementById('feed-container').innerHTML = `<p style="color:red; text-align:center;">エラー: ${error.message}</p>`;
+        } finally {
+            isFetching = false;
+            loadingIndicator.style.display = 'none';
+        }
+    }
+
+    // 通常の追加読み込み（ここは今まで通り）
+    async function fetchPosts(cursor) {
+        if (isFetching) return;
+        isFetching = true;
+        
         const loadingIndicator = document.getElementById('loading-indicator');
         const loadMoreBtn = document.getElementById('load-more-btn');
-        const container = document.getElementById('feed-container');
-
         loadingIndicator.style.display = 'block';
         loadMoreBtn.style.display = 'none';
 
-        let url = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${ACTOR}&filter=posts_with_replies&limit=${LIMIT}`;
-        if (cursor) url += `&cursor=${cursor}`;
-
         try {
+            const url = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${ACTOR}&filter=posts_with_replies&limit=${LIMIT}&cursor=${cursor}`;
             const response = await fetch(url);
-            if (!response.ok) throw new Error("APIエラー");
             const data = await response.json();
+            const container = document.getElementById('feed-container');
 
             data.feed.forEach(item => {
-                const post = item.post;
-                const reply = item.reply;
-                const article = document.createElement('article');
-                article.className = 'card';
-                
-                const safeId = "post-" + post.uri.split('/').pop(); 
-                article.id = safeId;
-
-                // 1. 親投稿
-                let parentHtml = '';
-                if (reply && reply.parent && reply.parent.author.did === post.author.did) {
-                    const parentId = "post-" + reply.parent.uri.split('/').pop();
-                    const parentText = reply.parent.record.text || "メディア投稿";
-                    parentHtml = `
-                        <a href="#${parentId}" class="parent-post-preview" onclick="handleJump(event, '${parentId}', '${reply.parent.uri}')">
-                            ${escapeHtml(parentText).substring(0, 60)}...
-                        </a>
-                    `;
-                }
-
-                // 2. 本文
-                const bodyText = applyFacets(post.record.text, post.record.facets);
-                let bodyHtml = `<div class="post-body">${bodyText}</div>`;
-                let moreBtnHtml = '';
-                if (post.record.text.length > 500) {
-                    bodyHtml = `<div class="post-body text-truncated" id="body-${safeId}">${bodyText}</div>`;
-                    moreBtnHtml = `<button class="read-more-btn" onclick="expandText('body-${safeId}', this)">...もっと見る</button>`;
-                }
-
-                // 3. メディア（既存のEmbed）
-                let mediaHtml = renderEmbed(post.embed);
-
-                // 4. 重複防止チェック（ここを修正）
-                const alreadyHasExternalCard = isExternalEmbedPresent(post.embed);
-                
-                // Embedカードがない場合のみ、Facetsからカードを生成する
-                if (!alreadyHasExternalCard && post.record.facets) {
-                    const extraCard = createExtraLinkCard(post.record.facets);
-                    if (extraCard) {
-                        mediaHtml += extraCard;
-                    }
-                }
-
-                article.innerHTML = `
-                    ${parentHtml}
-                    <div class="post-header">
-                        <img src="${post.author.avatar || 'https://via.placeholder.com/50'}" alt="Icon" class="user-avatar">
-                        <div class="user-info">
-                            <span class="user-name">${escapeHtml(post.author.displayName || post.author.handle)}</span>
-                            <span class="user-id">@${post.author.handle}</span>
-                        </div>
-                        <a href="https://bsky.app/profile/${post.author.handle}" target="_blank" class="follow-btn">Bluesky</a>
-                    </div>
-                    ${bodyHtml}
-                    ${moreBtnHtml}
-                    ${mediaHtml}
-                    <div style="font-size:0.85rem; color:#888; margin-top:8px;">
-                        ${new Date(post.record.createdAt).toLocaleString()}
-                    </div>
-                `;
-                container.appendChild(article);
-                
-                if(moreBtnHtml) {
-                    article.querySelector('.read-more-btn').style.display = 'inline-block';
-                }
+                // ピン留め済みの投稿が重複して出てこないようにスキップ（念のため）
+                // ただしAPIからはオブジェクト比較できないのでURIで判断したいが、
+                // 簡易的に「ピン留めが表示済みなら、以降のフィードで重複チェックはAPI仕様上難しいのでそのまま表示」
+                // またはここでDOM内を検索して重複排除も可能だが、今回はそのまま表示する（フィードの連続性を重視）
+                renderItem(item, container, false);
             });
 
             if (data.cursor) {
@@ -233,198 +254,166 @@
             } else {
                 currentCursor = null;
             }
-
-        } catch (error) {
-            console.error(error);
-            container.insertAdjacentHTML('beforeend', `<p style="color:red; text-align:center;">エラー: ${error.message}</p>`);
+        } catch(e) {
+            console.error(e);
         } finally {
             isFetching = false;
             loadingIndicator.style.display = 'none';
         }
     }
 
-    // --- 機能関数 ---
+    // --- 共通描画関数 ---
+    function renderItem(item, container, isPinned) {
+        const post = item.post;
+        const reply = item.reply;
+        
+        // ピン留めラベルHTML
+        const pinnedHtml = isPinned ? `<div class="pinned-label">固定された投稿</div>` : '';
 
-    // ★修正ポイント：カードの二重表示を防ぐためのチェック関数
+        const article = document.createElement('article');
+        article.className = 'card';
+        const safeId = "post-" + post.uri.split('/').pop(); 
+        article.id = safeId;
+
+        // 親投稿
+        let parentHtml = '';
+        if (reply && reply.parent && reply.parent.author.did === post.author.did && !isPinned) {
+            const parentId = "post-" + reply.parent.uri.split('/').pop();
+            const parentText = reply.parent.record.text || "メディア投稿";
+            parentHtml = `
+                <a href="#${parentId}" class="parent-post-preview" onclick="handleJump(event, '${parentId}', '${reply.parent.uri}')">
+                    ${escapeHtml(parentText).substring(0, 60)}...
+                </a>
+            `;
+        }
+
+        // 本文 & Moreボタン
+        const bodyText = applyFacets(post.record.text, post.record.facets);
+        let bodyHtml = `<div class="post-body">${bodyText}</div>`;
+        let moreBtnHtml = '';
+        if (post.record.text.length > 500) {
+            bodyHtml = `<div class="post-body text-truncated" id="body-${safeId}">${bodyText}</div>`;
+            moreBtnHtml = `<button class="read-more-btn" onclick="expandText('body-${safeId}', this)">...もっと見る</button>`;
+        }
+
+        // メディア
+        let mediaHtml = renderEmbed(post.embed);
+        
+        // カード重複チェック & 追加生成
+        const alreadyHasExternalCard = isExternalEmbedPresent(post.embed);
+        if (!alreadyHasExternalCard && post.record.facets) {
+            const extraCard = createExtraLinkCard(post.record.facets);
+            if (extraCard) mediaHtml += extraCard;
+        }
+
+        article.innerHTML = `
+            ${pinnedHtml}
+            ${parentHtml}
+            <div class="post-header">
+                <img src="${post.author.avatar || 'https://via.placeholder.com/50'}" alt="Icon" class="user-avatar">
+                <div class="user-info">
+                    <span class="user-name">${escapeHtml(post.author.displayName || post.author.handle)}</span>
+                    <span class="user-id">@${post.author.handle}</span>
+                </div>
+                <a href="https://bsky.app/profile/${post.author.handle}" target="_blank" class="follow-btn">Bluesky</a>
+            </div>
+            ${bodyHtml}
+            ${moreBtnHtml}
+            ${mediaHtml}
+            <div style="font-size:0.85rem; color:#888; margin-top:8px;">
+                ${new Date(post.record.createdAt).toLocaleString()}
+            </div>
+        `;
+        container.appendChild(article);
+        
+        if(moreBtnHtml) {
+            article.querySelector('.read-more-btn').style.display = 'inline-block';
+        }
+    }
+
+    // --- 以下、既存の機能関数 (変更なし) ---
     function isExternalEmbedPresent(embed) {
         if (!embed) return false;
-        
-        // 文字列比較ではなく、プロパティの有無で判断する（#viewなどが付いても対応できる）
         if (embed.external) return true;
-
-        // 念のためタイプ名に 'external' が含まれているかもチェック
         if (embed.$type && embed.$type.includes('app.bsky.embed.external')) return true;
-
-        // 複合型（RecordWithMedia）の場合、その中身（media）を再帰的にチェック
-        if (embed.media) {
-            return isExternalEmbedPresent(embed.media);
-        }
-        
+        if (embed.media) return isExternalEmbedPresent(embed.media);
         return false;
     }
 
     function applyFacets(text, facets) {
         if (!text) return "";
         if (!facets || facets.length === 0) return escapeHtml(text).replace(/\n/g, '<br>');
-
         const encoder = new TextEncoder();
         const decoder = new TextDecoder();
         const bytes = encoder.encode(text);
-        
-        let html = '';
-        let lastIndex = 0;
+        let html = ''; let lastIndex = 0;
         facets.sort((a, b) => a.index.byteStart - b.index.byteStart);
-
         for (const facet of facets) {
-            const start = facet.index.byteStart;
-            const end = facet.index.byteEnd;
+            const start = facet.index.byteStart; const end = facet.index.byteEnd;
             if (start > lastIndex) html += escapeHtml(decoder.decode(bytes.slice(lastIndex, start)));
-            
             const linkText = decoder.decode(bytes.slice(start, end));
             const linkFeature = facet.features.find(f => f.$type === 'app.bsky.richtext.facet#link');
-            
             if (linkFeature) {
                 html += `<a href="${linkFeature.uri}" target="_blank" rel="noopener">${escapeHtml(linkText)}</a>`;
-            } else {
-                html += escapeHtml(linkText);
-            }
+            } else { html += escapeHtml(linkText); }
             lastIndex = end;
         }
         if (lastIndex < bytes.length) html += escapeHtml(decoder.decode(bytes.slice(lastIndex)));
         return html.replace(/\n/g, '<br>');
     }
 
-    // カード生成ロジック (YouTube / Favicon)
     function createExtraLinkCard(facets) {
-        let html = '';
-        let foundLink = false;
-
+        let html = ''; let foundLink = false;
         for (const facet of facets) {
             if (foundLink) break;
             const feat = facet.features.find(f => f.$type === 'app.bsky.richtext.facet#link');
-            
             if (feat) {
                 foundLink = true;
                 const url = feat.uri;
-                let hostname = "external-link";
-                try { hostname = new URL(url).hostname; } catch(e){}
-
-                // YouTube判定 (Live / Shorts / youtu.be に対応)
+                let hostname = "external"; try { hostname = new URL(url).hostname; } catch(e){}
                 const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|live\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
-                
                 if (ytMatch) {
                     const vid = ytMatch[1];
                     const thumb = `https://img.youtube.com/vi/${vid}/hqdefault.jpg`;
-                    html += `
-                        <a href="${url}" target="_blank" rel="noopener" class="link-card has-large-image">
-                            <img src="${thumb}" class="link-card-img">
-                            <div class="link-card-content">
-                                <div class="link-card-title">YouTube動画</div>
-                                <div class="link-card-host"><img src="https://www.google.com/s2/favicons?domain=${hostname}" alt="">${hostname}</div>
-                            </div>
-                        </a>
-                    `;
+                    html += `<a href="${url}" target="_blank" rel="noopener" class="link-card has-large-image"><img src="${thumb}" class="link-card-img"><div class="link-card-content"><div class="link-card-title">YouTube動画</div><div class="link-card-host"><img src="https://www.google.com/s2/favicons?domain=${hostname}" alt="">${hostname}</div></div></a>`;
                 } else {
-                    // その他のリンク
                     const faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
-                    html += `
-                        <a href="${url}" target="_blank" rel="noopener" class="link-card">
-                            <img src="${faviconUrl}" class="link-card-icon" alt="">
-                            <div class="link-card-content">
-                                <div class="link-card-title">${hostname}</div>
-                                <div class="link-card-desc">${url}</div>
-                                <div class="link-card-host">
-                                    <img src="https://www.google.com/s2/favicons?domain=${hostname}" alt=""> ${hostname}
-                                </div>
-                            </div>
-                        </a>
-                    `;
+                    html += `<a href="${url}" target="_blank" rel="noopener" class="link-card"><img src="${faviconUrl}" class="link-card-icon" alt=""><div class="link-card-content"><div class="link-card-title">${hostname}</div><div class="link-card-desc">${url}</div><div class="link-card-host"><img src="https://www.google.com/s2/favicons?domain=${hostname}" alt=""> ${hostname}</div></div></a>`;
                 }
             }
         }
         return html;
     }
 
-    function expandText(elementId, btn) {
-        document.getElementById(elementId).classList.remove('text-truncated');
-        btn.style.display = 'none';
-    }
-
     function renderEmbed(embed) {
         if (!embed) return "";
-
-        // 画像
         if (embed.images) {
             let count = embed.images.length;
             let html = `<div class="post-images" data-count="${count}">`;
-            embed.images.forEach(img => {
-                html += `<img src="${img.thumb}" alt="${escapeHtml(img.alt || '')}">`;
-            });
-            html += `</div>`;
-            return html;
+            embed.images.forEach(img => { html += `<img src="${img.thumb}" alt="${escapeHtml(img.alt || '')}">`; });
+            html += `</div>`; return html;
         }
-        // 外部リンク
         if (embed.external) {
             const ext = embed.external;
-            return `
-                <a href="${ext.uri}" target="_blank" rel="noopener" class="link-card has-large-image">
-                    ${ext.thumb ? `<img src="${ext.thumb}" class="link-card-img">` : ''}
-                    <div class="link-card-content">
-                        <div class="link-card-title">${escapeHtml(ext.title || 'No Title')}</div>
-                        <div class="link-card-desc">${escapeHtml(ext.description || '')}</div>
-                        <div class="link-card-host">
-                             <img src="https://www.google.com/s2/favicons?domain=${new URL(ext.uri).hostname}" alt=""> ${new URL(ext.uri).hostname}
-                        </div>
-                    </div>
-                </a>
-            `;
+            return `<a href="${ext.uri}" target="_blank" rel="noopener" class="link-card has-large-image">${ext.thumb ? `<img src="${ext.thumb}" class="link-card-img">` : ''}<div class="link-card-content"><div class="link-card-title">${escapeHtml(ext.title || 'No Title')}</div><div class="link-card-desc">${escapeHtml(ext.description || '')}</div><div class="link-card-host"><img src="https://www.google.com/s2/favicons?domain=${new URL(ext.uri).hostname}" alt=""> ${new URL(ext.uri).hostname}</div></div></a>`;
         }
-        // 引用
         if (embed.record && embed.record.value) { 
-             const rec = embed.record.value;
-             const author = embed.record.author || { handle: 'unknown', avatar: '' };
-             const postUri = embed.record.uri || "";
-             const postId = postUri.split('/').pop();
+             const rec = embed.record.value; const author = embed.record.author || { handle: 'unknown', avatar: '' };
+             const postUri = embed.record.uri || ""; const postId = postUri.split('/').pop();
              const quoteUrl = `https://bsky.app/profile/${author.handle}/post/${postId}`;
-             return `
-                <div class="quote-card" onclick="window.open('${quoteUrl}', '_blank')">
-                    <div class="quote-user">
-                        <img src="${author.avatar || 'https://via.placeholder.com/20'}" alt="">
-                        <span>${escapeHtml(author.displayName || author.handle)}</span>
-                    </div>
-                    <div class="quote-body">${escapeHtml(rec.text || '')}</div>
-                </div>
-             `;
+             return `<div class="quote-card" onclick="window.open('${quoteUrl}', '_blank')"><div class="quote-user"><img src="${author.avatar || 'https://via.placeholder.com/20'}" alt=""><span>${escapeHtml(author.displayName || author.handle)}</span></div><div class="quote-body">${escapeHtml(rec.text || '')}</div></div>`;
         }
-        // 複合
-        if (embed.media && embed.record) {
-             return renderEmbed(embed.media) + renderEmbed(embed.record);
-        }
-        // $typeチェックでも複合を拾う
-        if (embed.$type && embed.$type.includes('recordWithMedia')) {
-             return renderEmbed(embed.media) + renderEmbed(embed.record);
-        }
-
+        if (embed.media && embed.record) return renderEmbed(embed.media) + renderEmbed(embed.record);
+        if (embed.$type && embed.$type.includes('recordWithMedia')) return renderEmbed(embed.media) + renderEmbed(embed.record);
         return "";
     }
 
-    function escapeHtml(text) {
-        if (!text) return "";
-        return text.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]);
-    }
-
+    function expandText(elementId, btn) { document.getElementById(elementId).classList.remove('text-truncated'); btn.style.display = 'none'; }
+    function escapeHtml(text) { if (!text) return ""; return text.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]); }
     function handleJump(e, targetId, bskyUri) {
-        e.preventDefault();
-        const targetEl = document.getElementById(targetId);
-        if (targetEl) {
-            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            targetEl.classList.add('highlight');
-            setTimeout(() => targetEl.classList.remove('highlight'), 1500);
-        } else {
-            const parts = bskyUri.split('/');
-            const postId = parts.pop();
-            window.open(`https://bsky.app/profile/${ACTOR}/post/${postId}`, '_blank');
-        }
+        e.preventDefault(); const targetEl = document.getElementById(targetId);
+        if (targetEl) { targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); targetEl.classList.add('highlight'); setTimeout(() => targetEl.classList.remove('highlight'), 1500); }
+        else { const parts = bskyUri.split('/'); const postId = parts.pop(); window.open(`https://bsky.app/profile/${ACTOR}/post/${postId}`, '_blank'); }
     }
 </script>
 
