@@ -3,16 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bluesky Feed V20.0 RISE</title>
+    <title>Bluesky Feed V21.0 RISE</title>
     <style>
-        /* Ver 20.0: Standard 16:9 Image Aspect Ratio */
+        /* Ver 21.0: Load More Button & Pinned Post Support */
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-main: #0b0f14; --text-sub: #42576c; --accent-blue: #0085ff; --border-color: #e1e3e5; --hover-bg: #f5f7f9; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; color: var(--text-main); }
         /* body { background-color: transparent; padding: 10px 0; } */
         
-        .container { max-width: 600px; margin: 0 auto; position: relative; }
+        .container { max-width: 600px; margin: 0 auto; position: relative; padding-bottom: 40px; }
         .version-tag { position: absolute; top: -20px; right: 0; font-size: 10px; color: #aaa; }
-        .post-card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; margin-bottom: 12px; display: flex; gap: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        
+        .post-card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; margin-bottom: 12px; display: flex; gap: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); position: relative; }
         .avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background-color: #eee; flex-shrink: 0; }
         .content { flex: 1; min-width: 0; }
         .header { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; flex-wrap: wrap; }
@@ -22,15 +23,19 @@
         .text { font-size: 15px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 10px; }
         .text a { color: var(--accent-blue); text-decoration: none; } .text a:hover { text-decoration: underline; }
         
-        /* ★画像スタイルの最適化: 16:9の比率で統一 */
+        /* ピン留めラベル */
+        .pinned-label {
+            display: flex; align-items: center; gap: 4px;
+            font-size: 12px; color: var(--text-sub); font-weight: bold;
+            margin-bottom: 6px;
+        }
+        .pinned-icon { width: 14px; height: 14px; fill: var(--text-sub); }
+
+        /* 画像：16:9比率 */
         .post-image {
-            margin-top: 8px;
-            border-radius: 8px;
-            width: 100%;            /* 幅はカードと同じ */
-            aspect-ratio: 16 / 9;   /* 高さは幅に合わせて自動調整（YouTubeサムネと同じ比率） */
-            object-fit: cover;      /* 枠いっぱいに綺麗に表示（歪まない） */
-            border: 1px solid var(--border-color);
-            display: block;
+            margin-top: 8px; border-radius: 8px;
+            width: 100%; aspect-ratio: 16 / 9; object-fit: cover;
+            border: 1px solid var(--border-color); display: block;
         }
         
         .embed-card { margin-top: 10px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; text-decoration: none; color: inherit; display: block; transition: background-color 0.2s; background-color: var(--card-bg); min-height: 80px; }
@@ -47,17 +52,35 @@
         .quote-avatar { width: 20px; height: 20px; border-radius: 50%; }
         .quote-name { font-weight: 700; font-size: 13px; } .quote-handle { font-size: 13px; color: var(--text-sub); } .quote-text { font-size: 14px; }
         .loading { text-align: center; color: var(--text-sub); margin-top: 20px; }
+
+        /* ★Moreボタンのスタイル */
+        .more-btn {
+            display: block; width: 100%; padding: 12px;
+            background-color: var(--card-bg); border: 1px solid var(--border-color);
+            color: var(--accent-blue); text-align: center; font-weight: bold;
+            border-radius: 8px; cursor: pointer; margin-top: 20px;
+            transition: background 0.2s;
+        }
+        .more-btn:hover { background-color: var(--hover-bg); }
+        .more-btn.hidden { display: none; }
     </style>
 </head>
 <body>
 <div class="container" id="feed-container">
-    <div class="version-tag">Ver 20.0 (This sites is created by RISE)</div>
-    <div class="loading">読み込み中...</div>
+    <div class="version-tag">Ver 21.0 (This sites is created by RISE)</div>
+    </div>
+
+<div class="container">
+    <button id="more-btn" class="more-btn hidden" onclick="loadMore()">More Posts</button>
+    <div id="loading-more" class="loading hidden">読み込み中...</div>
 </div>
 
 <script>
     const HANDLE = 'katsuobushi-kawa.bsky.social';
-    const API_URL = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${HANDLE}&filter=posts_no_replies&limit=10`;
+    const API_BASE = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${HANDLE}&filter=posts_no_replies&limit=10`;
+
+    let nextCursor = null; // 次のページを読み込むためのキー
+    const renderedPostUris = new Set(); // 重複表示防止用
 
     function extractYoutubeId(text) {
         const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|live|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
@@ -73,25 +96,19 @@
         const text = record.text;
         if (!text) return '';
         if (!record.facets || record.facets.length === 0) return escapeHtml(text);
-
-        const encoder = new TextEncoder();
-        const decoder = new TextDecoder();
+        const encoder = new TextEncoder(); const decoder = new TextDecoder();
         const textBytes = encoder.encode(text);
         const facets = record.facets.sort((a, b) => a.index.byteStart - b.index.byteStart);
         let html = ''; let lastByteIndex = 0;
-
         facets.forEach(facet => {
             const start = facet.index.byteStart; const end = facet.index.byteEnd;
             if (start > lastByteIndex) html += escapeHtml(decoder.decode(textBytes.slice(lastByteIndex, start)));
-            
             const linkText = escapeHtml(decoder.decode(textBytes.slice(start, end)));
             let url = '#'; let isLink = false;
-            
             if (facet.features) {
                 const linkFeature = facet.features.find(f => f.$type === 'app.bsky.richtext.facet#link');
                 if (linkFeature) { url = linkFeature.uri; isLink = true; }
             }
-
             if (isLink) {
                 const ytId = extractYoutubeId(url);
                 if (ytId) url = `https://www.youtube.com/watch?v=${ytId}`;
@@ -144,24 +161,56 @@
         return null;
     }
 
-    async function fetchBlueskyPosts() {
+    async function fetchBlueskyPosts(isLoadMore = false) {
         const container = document.getElementById('feed-container');
+        const moreBtn = document.getElementById('more-btn');
+        const loadingMore = document.getElementById('loading-more');
+
+        // 初回読み込み時はコンテナをクリア
+        if (!isLoadMore) {
+            container.innerHTML = '<div class="version-tag">Ver 21.0 (This sites is created by RISE)</div>';
+            renderedPostUris.clear();
+            nextCursor = null;
+        } else {
+            moreBtn.classList.add('hidden');
+            loadingMore.classList.remove('hidden');
+        }
+
         try {
-            const response = await fetch(API_URL);
+            // カーソルがあればURLに追加
+            let url = API_BASE;
+            if (nextCursor) {
+                url += `&cursor=${nextCursor}`;
+            }
+
+            const response = await fetch(url);
             if (!response.ok) throw new Error('データ取得に失敗しました');
             const data = await response.json();
-            const versionTag = container.querySelector('.version-tag');
-            container.innerHTML = ''; if(versionTag) container.appendChild(versionTag);
+            
+            // 次の読み込み用にカーソルを保存
+            nextCursor = data.cursor;
 
             data.feed.forEach((item, index) => {
-                const post = item.post; const author = post.author; const record = post.record;
+                const post = item.post;
+                
+                // 重複チェック（ピン留め投稿が通常の時系列でも出てくるのを防ぐ）
+                if (renderedPostUris.has(post.uri)) return;
+                renderedPostUris.add(post.uri);
+
+                const author = post.author;
+                const record = post.record;
                 const date = new Date(record.createdAt);
                 const timeStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
-                const card = document.createElement('div'); card.className = 'post-card';
+                
+                // ★ピン留め判定
+                const isPinned = item.reason && item.reason.$type === 'app.bsky.feed.defs#reasonPin';
+                
+                const card = document.createElement('div');
+                card.className = 'post-card';
                 
                 let imagesHtml = '';
                 if (post.embed && post.embed.images) {
-                    post.embed.images.forEach(img => { imagesHtml += `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="post-image" alt="post image">`; });
+                    post.embed.images.forEach(img => { imagesHtml += `<img src="${img.thumb}" class="post-image" alt="post image">`; });
                 }
 
                 let embedHtml = renderEmbed(post.embed);
@@ -183,19 +232,58 @@
                         }
                     }
                     if (!embedHtml && extraCardUrl) {
-                        extraCardId = `card-load-${index}`;
+                        extraCardId = `card-load-${isLoadMore ? 'more-' : ''}${index}`;
                         embedHtml = `<div id="${extraCardId}" class="card-loading">リンク情報を取得中...</div>`;
                     }
                 }
 
                 const formattedText = formatRichText(record);
-                card.innerHTML = `<img src="${author.avatar}" class="avatar" alt="${author.displayName}"><div class="content"><div class="header"><a href="https://bsky.app/profile/${author.handle}" target="_blank" class="display-name">${author.displayName || author.handle}</a><a href="https://bsky.app/profile/${author.handle}" target="_blank" class="handle">@${author.handle}</a><span class="time">· ${timeStr}</span></div><div class="text">${formattedText}</div>${imagesHtml}${embedHtml || ''}</div>`;
+                
+                // ピン留めラベルのHTML
+                const pinHtml = isPinned ? `<div class="pinned-label">📌 Pinned Post</div>` : '';
+
+                card.innerHTML = `
+                    ${pinHtml}
+                    <img src="${author.avatar}" class="avatar" alt="${author.displayName}">
+                    <div class="content">
+                        <div class="header">
+                            <a href="https://bsky.app/profile/${author.handle}" target="_blank" class="display-name">${author.displayName || author.handle}</a>
+                            <a href="https://bsky.app/profile/${author.handle}" target="_blank" class="handle">@${author.handle}</a>
+                            <span class="time">· ${timeStr}</span>
+                        </div>
+                        <div class="text">${formattedText}</div>
+                        ${imagesHtml}
+                        ${embedHtml || ''}
+                    </div>
+                `;
                 container.appendChild(card);
 
                 if (extraCardId && extraCardUrl) { fetchOgData(extraCardUrl, extraCardId); }
             });
-        } catch (error) { container.innerHTML += `<div class="loading">エラー: ${error.message}</div>`; }
+
+            // Moreボタンの制御
+            if (nextCursor) {
+                moreBtn.classList.remove('hidden');
+            } else {
+                moreBtn.classList.add('hidden'); // もう読み込むものがない
+            }
+
+        } catch (error) {
+            console.error(error);
+            container.innerHTML += `<div class="loading">エラーが発生しました（再読み込みしてください）</div>`;
+        } finally {
+            if (isLoadMore) {
+                loadingMore.classList.add('hidden');
+            }
+        }
     }
+
+    // ボタンから呼ぶ関数
+    function loadMore() {
+        fetchBlueskyPosts(true);
+    }
+
+    // 初回読み込み
     fetchBlueskyPosts();
 </script>
 </body>
