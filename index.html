@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Bluesky Feed (ver33.0)</title>
+<title>My Bluesky Feed (ver34.0)</title>
 <style>
     /* --------------------------------------------------
        基本設定
@@ -28,7 +28,7 @@
     }
     .card.highlight { background-color: #fff8c5; transition: none; }
 
-    /* 親投稿（自分への返信）のグレー枠 */
+    /* 親投稿（自分への返信） */
     .parent-post-preview {
         display: block; text-decoration: none;
         background-color: #f7f9f9; border: 1px solid #eff3f4;
@@ -58,7 +58,6 @@
         font-size: 1rem; margin-bottom: 12px; 
         white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
     }
-    /* リンクの色 */
     .post-body a { color: #1d9bf0; text-decoration: none; }
     .post-body a:hover { text-decoration: underline; }
 
@@ -72,29 +71,35 @@
         color: #1d9bf0; cursor: pointer; font-size: 0.9rem;
         margin-bottom: 10px; display: none;
     }
-    .read-more-btn:hover { text-decoration: underline; }
 
     /* --- メディア表示エリア --- */
-    
-    /* 画像 */
     .post-images { display: grid; gap: 2px; border-radius: 12px; overflow: hidden; margin-top: 12px; border: 1px solid #cfd9de; }
     .post-images img { width: 100%; height: auto; object-fit: cover; display: block; }
     .post-images[data-count="1"] { grid-template-columns: 1fr; }
     .post-images[data-count="2"] { grid-template-columns: 1fr 1fr; }
 
-    /* リンクカード (Link Card) */
+    /* リンクカード (共通デザイン) */
     .link-card {
-        display: block; text-decoration: none; color: inherit;
+        display: flex; text-decoration: none; color: inherit;
         border: 1px solid #cfd9de; border-radius: 12px; overflow: hidden;
-        margin-top: 12px; transition: background 0.2s; position: relative;
+        margin-top: 12px; transition: background 0.2s; background: #fff;
+        align-items: center; min-height: 100px;
     }
     .link-card:hover { background-color: #f7f9f9; }
-    .link-card-img { width: 100%; height: 200px; object-fit: cover; display: block; border-bottom: 1px solid #cfd9de; background: #eee; }
-    .link-card-content { padding: 12px; }
-    .link-card-title { font-weight: bold; font-size: 1rem; margin-bottom: 4px; line-height: 1.4; }
-    .link-card-desc { font-size: 0.9rem; color: #536471; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .link-card-host { font-size: 0.85rem; color: #888; }
     
+    /* 通常のOGP画像がある場合 (縦積み) */
+    .link-card.has-large-image { display: block; }
+    .link-card.has-large-image .link-card-img { width: 100%; height: 200px; object-fit: cover; display: block; border-bottom: 1px solid #cfd9de; }
+    
+    /* 画像がない/Faviconの場合 (横並び) */
+    .link-card-icon { width: 80px; height: 80px; object-fit: contain; padding: 15px; background: #f7f9f9; border-right: 1px solid #cfd9de; flex-shrink: 0;}
+    
+    .link-card-content { padding: 12px; flex: 1; min-width: 0;}
+    .link-card-title { font-weight: bold; font-size: 0.95rem; margin-bottom: 4px; line-height: 1.4; }
+    .link-card-desc { font-size: 0.85rem; color: #536471; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .link-card-host { font-size: 0.8rem; color: #888; display: flex; align-items: center; }
+    .link-card-host img { width: 14px; height: 14px; margin-right: 4px; }
+
     /* 引用カード */
     .quote-card {
         border: 1px solid #cfd9de; border-radius: 12px; padding: 12px;
@@ -163,7 +168,7 @@
                 const safeId = "post-" + post.uri.split('/').pop(); 
                 article.id = safeId;
 
-                // 1. 親投稿（自分への返信）
+                // 1. 親投稿表示
                 let parentHtml = '';
                 if (reply && reply.parent && reply.parent.author.did === post.author.did) {
                     const parentId = "post-" + reply.parent.uri.split('/').pop();
@@ -175,8 +180,7 @@
                     `;
                 }
 
-                // 2. ★修正ポイント: Facets（裏データ）を使った正しいリンク生成★
-                // 表示上の文字が省略されていても、ここから正しいURLを取得します
+                // 2. Facetsを使った本文リンク生成
                 const bodyText = applyFacets(post.record.text, post.record.facets);
                 
                 let bodyHtml = `<div class="post-body">${bodyText}</div>`;
@@ -187,13 +191,14 @@
                     moreBtnHtml = `<button class="read-more-btn" onclick="expandText('body-${safeId}', this)">...もっと見る</button>`;
                 }
 
-                // 3. メディア表示（画像・カード）
+                // 3. メディア表示
                 let mediaHtml = renderEmbed(post.embed);
 
-                // 4. ★追加ポイント: 画像とURLの共存対応★
-                // 画像が表示されており(mediaHtmlに画像がある)、かつリンクカードが表示されていない場合
-                // Facetsの中にURLがあれば、それをカード化してあげる処理
-                if (post.embed && post.embed.$type.includes('images') && post.record.facets) {
+                // 4. ★追加機能★ 写真があってもURLがあれば強制的にカードを作る
+                // 既にEmbedで外部リンク(external)が表示されている場合は作らない
+                const hasExternalEmbed = post.embed && post.embed.$type === 'app.bsky.embed.external';
+                
+                if (!hasExternalEmbed && post.record.facets) {
                     const extraCard = createExtraLinkCard(post.record.facets);
                     if (extraCard) {
                         mediaHtml += extraCard;
@@ -242,85 +247,81 @@
 
     // --- 機能関数 ---
 
-    // ★Facets（位置情報付きリンクデータ）を適用してHTMLを作る関数★
-    // これにより "www.youtube.com..." という文字の下に "https://www.youtube.com/watch?v=..." という正しいリンクを埋め込みます
     function applyFacets(text, facets) {
         if (!text) return "";
         if (!facets || facets.length === 0) return escapeHtml(text).replace(/\n/g, '<br>');
 
-        // Blueskyのindexは「バイト数」なので、JSの文字列indexとズレます。TextEncoderで補正します。
         const encoder = new TextEncoder();
         const decoder = new TextDecoder();
         const bytes = encoder.encode(text);
         
         let html = '';
         let lastIndex = 0;
-
-        // Facetsを念のため開始位置順にソート
         facets.sort((a, b) => a.index.byteStart - b.index.byteStart);
 
         for (const facet of facets) {
             const start = facet.index.byteStart;
             const end = facet.index.byteEnd;
-
-            // リンク前のテキスト
-            if (start > lastIndex) {
-                html += escapeHtml(decoder.decode(bytes.slice(lastIndex, start)));
-            }
-
-            // リンク部分のテキストとURL
-            const linkText = decoder.decode(bytes.slice(start, end));
+            if (start > lastIndex) html += escapeHtml(decoder.decode(bytes.slice(lastIndex, start)));
             
-            // リンク機能を探す
+            const linkText = decoder.decode(bytes.slice(start, end));
             const linkFeature = facet.features.find(f => f.$type === 'app.bsky.richtext.facet#link');
             
             if (linkFeature) {
                 html += `<a href="${linkFeature.uri}" target="_blank" rel="noopener">${escapeHtml(linkText)}</a>`;
             } else {
-                // メンションやタグなど、今回は単純テキストとして表示（必要なら拡張可能）
                 html += escapeHtml(linkText);
             }
-
             lastIndex = end;
         }
-
-        // 残りのテキスト
-        if (lastIndex < bytes.length) {
-            html += escapeHtml(decoder.decode(bytes.slice(lastIndex)));
-        }
-
+        if (lastIndex < bytes.length) html += escapeHtml(decoder.decode(bytes.slice(lastIndex)));
         return html.replace(/\n/g, '<br>');
     }
 
-    // 画像と共存する隠れリンクのカード化（主にYouTube用）
+    // ★修正版：どんなリンクでもカード化する関数★
     function createExtraLinkCard(facets) {
         let html = '';
+        // 最初の1つのリンクだけをカード化する（複数はうっとうしいので）
+        let foundLink = false;
+
         for (const facet of facets) {
+            if (foundLink) break;
             const feat = facet.features.find(f => f.$type === 'app.bsky.richtext.facet#link');
+            
             if (feat) {
+                foundLink = true;
                 const url = feat.uri;
-                // YouTubeの判定
+                const hostname = new URL(url).hostname;
+                
+                // YouTubeの特別扱い（サムネが取れるため）
                 const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/);
+                
                 if (ytMatch) {
                     const vid = ytMatch[1];
                     const thumb = `https://img.youtube.com/vi/${vid}/hqdefault.jpg`;
                     html += `
-                        <a href="${url}" target="_blank" rel="noopener" class="link-card" style="margin-top:8px;">
-                            <img src="${thumb}" class="link-card-img" style="height:180px;">
+                        <a href="${url}" target="_blank" rel="noopener" class="link-card has-large-image">
+                            <img src="${thumb}" class="link-card-img">
                             <div class="link-card-content">
                                 <div class="link-card-title">YouTube動画</div>
-                                <div class="link-card-host">youtube.com</div>
+                                <div class="link-card-host"><img src="https://www.google.com/s2/favicons?domain=${hostname}" alt="">${hostname}</div>
                             </div>
                         </a>
                     `;
                 } else {
-                    // YouTube以外（タイトルなどは取得できないので簡易表示）
-                    // 邪魔にならないよう、テキストリンクボックスを表示
+                    // ★楽天などその他のリンク（Faviconを使ってカード化）★
+                    // 画像の代わりにサイトのアイコンを左側に表示
+                    const faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
+                    
                     html += `
-                        <a href="${url}" target="_blank" rel="noopener" class="link-card" style="margin-top:8px; display:flex; align-items:center; min-height:auto;">
+                        <a href="${url}" target="_blank" rel="noopener" class="link-card">
+                            <img src="${faviconUrl}" class="link-card-icon" alt="">
                             <div class="link-card-content">
-                                <div class="link-card-title" style="font-size:0.9rem; margin:0;">🔗 外部リンク: ${new URL(url).hostname}</div>
-                                <div class="link-card-desc" style="font-size:0.8rem; color:#888;">${url}</div>
+                                <div class="link-card-title">${hostname}</div>
+                                <div class="link-card-desc">${url}</div>
+                                <div class="link-card-host">
+                                    <img src="https://www.google.com/s2/favicons?domain=${hostname}" alt=""> ${hostname}
+                                </div>
                             </div>
                         </a>
                     `;
@@ -348,16 +349,18 @@
             html += `</div>`;
             return html;
         }
-        // 外部リンク (本来のカード)
+        // 通常の外部リンクカード
         if (embed.external) {
             const ext = embed.external;
             return `
-                <a href="${ext.uri}" target="_blank" rel="noopener" class="link-card">
+                <a href="${ext.uri}" target="_blank" rel="noopener" class="link-card has-large-image">
                     ${ext.thumb ? `<img src="${ext.thumb}" class="link-card-img">` : ''}
                     <div class="link-card-content">
                         <div class="link-card-title">${escapeHtml(ext.title || 'No Title')}</div>
                         <div class="link-card-desc">${escapeHtml(ext.description || '')}</div>
-                        <div class="link-card-host">${new URL(ext.uri).hostname}</div>
+                        <div class="link-card-host">
+                             <img src="https://www.google.com/s2/favicons?domain=${new URL(ext.uri).hostname}" alt=""> ${new URL(ext.uri).hostname}
+                        </div>
                     </div>
                 </a>
             `;
@@ -379,7 +382,7 @@
                 </div>
              `;
         }
-        // 複合 (EmbedWithMedia)
+        // 複合
         if (embed.$type === 'app.bsky.embed.recordWithMedia') {
             return renderEmbed(embed.media) + renderEmbed(embed.record);
         }
