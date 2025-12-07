@@ -2,341 +2,306 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fixed ver25.0 Thread View</title>
 <style>
-  /* 基本設定 (ダークモードベース) */
-  :root {
-    --bg-color: #000000;
-    --card-bg: #161e27;
-    --text-main: #ffffff;
-    --text-sub: #aebbc9;
-    --accent: #0085ff;
-    --border: #2e4052;
-    --hover-bg: #1c2633;
-  }
+    /* --------------------------------------------------
+       基本設定
+       -------------------------------------------------- */
+    body, html {
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: #0f1419;
+        line-height: 1.6;
+        overflow-x: hidden; 
+        background-color: #f9f9f9;
+        scroll-behavior: smooth; /* スムーズスクロール */
+    }
 
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    margin: 0;
-    background-color: var(--bg-color);
-    color: var(--text-main);
-    overflow-y: auto;
-  }
+    /* レイアウトコンテナ */
+    .container {
+        display: flex;
+        flex-wrap: wrap;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        gap: 20px;
+        position: relative;
+    }
 
-  /* プロフィールカード全体の枠 */
-  .profile-card {
-    background-color: var(--bg-color);
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 10px;
-    position: relative;
-  }
+    /* メインコンテンツエリア */
+    .main-content {
+        flex: 1;
+        min-width: 0;
+        max-width: 600px; /* タイムラインっぽく幅制限 */
+        margin: 0 auto;   /* 中央寄せ */
+    }
 
-  /* ヘッダー画像 */
-  .banner {
-    width: 100%;
-    height: 150px;
-    background-color: #333;
-    background-size: cover;
-    background-position: center;
-  }
+    /* --------------------------------------------------
+       投稿カードのデザイン
+       -------------------------------------------------- */
+    .card {
+        background: #fff;
+        border: 1px solid #cfd9de; /* Twitterっぽい薄い枠線 */
+        border-radius: 16px;
+        padding: 16px;
+        margin-bottom: 24px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+        transition: background-color 1s ease; /* ハイライト用 */
+    }
 
-  /* アイコンとフォローボタンのエリア */
-  .profile-header {
-    padding: 0 16px;
-    position: relative;
-    display: flex;
-    justify-content: flex-end; /* ボタンを右寄せ */
-    align-items: flex-start;
-    margin-top: -40px; /* バナーに重ねる */
-    margin-bottom: 10px;
-  }
+    /* スクロール移動先としてハイライトするためのクラス */
+    .card.highlight {
+        background-color: #fff8c5; /* 一瞬黄色くなる */
+        transition: none;
+    }
 
-  /* アイコン */
-  .avatar {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    border: 4px solid var(--bg-color);
-    position: absolute;
-    left: 16px;
-    top: 0;
-    background-color: #000;
-    object-fit: cover;
-  }
+    /* --- 親投稿（グレー枠） --- */
+    .parent-post-preview {
+        display: block; /* リンクとして機能させる */
+        text-decoration: none;
+        background-color: #f7f9f9;
+        border: 1px solid #eff3f4;
+        border-radius: 12px;
+        padding: 12px;
+        margin-bottom: 12px;
+        font-size: 0.9rem;
+        color: #536471;
+        position: relative;
+        transition: background-color 0.2s;
+    }
+    
+    .parent-post-preview:hover {
+        background-color: #eff1f1;
+    }
 
-  /* フォローボタン (Bluesky風) */
-  .follow-btn {
-    margin-top: 50px; /* アイコンとの位置調整 */
-    background-color: var(--accent);
-    color: white;
-    border: none;
-    padding: 8px 24px;
-    border-radius: 999px;
-    font-weight: bold;
-    cursor: pointer;
-    text-decoration: none;
-    font-size: 14px;
-    transition: opacity 0.2s;
-  }
-  .follow-btn:hover { opacity: 0.9; }
+    .parent-post-preview::before {
+        content: "返信先: 自分";
+        display: block;
+        font-size: 0.75rem;
+        color: #536471;
+        margin-bottom: 4px;
+        font-weight: bold;
+    }
 
-  /* 名前とID */
-  .profile-info {
-    padding: 0 16px;
-    margin-top: 5px;
-  }
-  .display-name {
-    font-size: 24px;
-    font-weight: bold;
-    margin: 0;
-    line-height: 1.2;
-  }
-  .handle {
-    color: var(--text-sub);
-    font-size: 15px;
-    margin: 4px 0 0 0;
-  }
+    /* --- 投稿ヘッダー（アイコン・名前・フォローボタン） --- */
+    .post-header {
+        display: flex;
+        align-items: center; /* 垂直中央揃え */
+        margin-bottom: 12px;
+    }
 
-  /* 投稿エリア */
-  .feed {
-    margin-top: 10px;
-  }
+    .user-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        object-fit: cover;
+        margin-right: 12px;
+        background-color: #ccc; /* 画像がない場合のダミー色 */
+    }
 
-  .post {
-    padding: 16px;
-    border-top: 1px solid var(--border);
-    cursor: default;
-  }
-  
-  .post-header {
-    display: flex;
-    margin-bottom: 5px;
-    color: var(--text-sub);
-    font-size: 14px;
-  }
-  
-  .post-content {
-    font-size: 15px;
-    line-height: 1.5;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
+    .user-info {
+        flex: 1; /* 余ったスペースを埋める */
+        line-height: 1.2;
+    }
 
-  /* 引用（灰色の枠） */
-  .quote-box {
-    margin-top: 10px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px;
-    cursor: pointer; /* クリックできることを示す */
-    transition: background-color 0.2s;
-  }
-  .quote-box:hover {
-    background-color: rgba(255,255,255,0.05);
-  }
+    .user-name {
+        font-weight: bold;
+        font-size: 1rem;
+        display: block;
+    }
 
-  .quote-author {
-    font-weight: bold;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
-  .quote-author img {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-  }
-  .quote-handle {
-    color: var(--text-sub);
-    font-weight: normal;
-  }
+    .user-id {
+        color: #536471;
+        font-size: 0.9rem;
+    }
 
-  /* ピン留めラベル */
-  .pinned-label {
-    color: var(--text-sub);
-    font-size: 13px;
-    font-weight: bold;
-    margin-bottom: 5px;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
+    .follow-btn {
+        background-color: #0f1419;
+        color: #fff;
+        border: none;
+        border-radius: 9999px; /* 完全な丸み */
+        padding: 6px 16px;
+        font-weight: bold;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: opacity 0.2s;
+    }
 
-  /* リンクの色 */
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
+    .follow-btn:hover {
+        opacity: 0.8;
+    }
+    
+    .follow-btn.following {
+        background-color: #fff;
+        color: #0f1419;
+        border: 1px solid #cfd9de;
+    }
+
+    /* --- 本文とMoreボタン --- */
+    .post-body {
+        font-size: 1rem;
+        margin-bottom: 12px;
+        white-space: pre-wrap; /* 改行を反映 */
+    }
+
+    .more-content {
+        display: none;
+        opacity: 0;
+        transition: opacity 0.5s ease;
+    }
+
+    .more-content.is-open {
+        display: block;
+        animation: fadeIn 0.5s forwards;
+    }
+
+    @keyframes fadeIn {
+        to { opacity: 1; }
+    }
+
+    .more-btn {
+        color: #1d9bf0;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+        font-size: 0.95rem;
+    }
+    .more-btn:hover { text-decoration: underline; }
+
+
+    /* --------------------------------------------------
+       サイドバー (Sticky)
+       -------------------------------------------------- */
+    .sticky-sidebar {
+        width: 300px;
+        position: -webkit-sticky;
+        position: sticky;
+        top: 20px;
+        height: fit-content;
+        background: #fff;
+        padding: 20px;
+        border-radius: 16px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+
+    @media (max-width: 768px) {
+        .container { flex-direction: column; }
+        .sticky-sidebar { width: 100%; position: static; }
+        .main-content { max-width: 100%; }
+    }
 
 </style>
 </head>
 <body>
 
-<div class="profile-card">
-  <div id="banner" class="banner"></div>
-  <div class="profile-header">
-    <img id="avatar" class="avatar" src="" alt="">
-    <a id="follow-link" href="#" target="_blank" class="follow-btn">Follow</a>
-  </div>
-  <div class="profile-info">
-    <h1 id="display-name" class="display-name">Loading...</h1>
-    <p id="handle" class="handle">@...</p>
-  </div>
+<div class="container">
+    
+    <main class="main-content">
+
+        <article class="card" id="post-001">
+            <div class="post-header">
+                <img src="https://placehold.co/100" alt="Icon" class="user-avatar">
+                <div class="user-info">
+                    <span class="user-name">Gemini User</span>
+                    <span class="user-id">@gemini_fan</span>
+                </div>
+                <button class="follow-btn">フォロー</button>
+            </div>
+            <div class="post-body">
+                <p>これが最初の投稿です。ここからスレッドが始まります。<br>
+                この投稿には ID="post-001" が振られています。</p>
+            </div>
+        </article>
+
+        <article class="card" id="post-002">
+            <div class="post-header">
+                <img src="https://placehold.co/100/orange/white" alt="Icon" class="user-avatar">
+                <div class="user-info">
+                    <span class="user-name">Tanaka</span>
+                    <span class="user-id">@tnk_daily</span>
+                </div>
+                <button class="follow-btn">フォロー</button>
+            </div>
+            <div class="post-body">
+                <p>これは関係ない別の人の投稿です。スクロールの距離を稼ぐために置いてあります。</p>
+                <div style="height: 100px; background:#eee;">画像エリア想定</div>
+            </div>
+        </article>
+
+        <article class="card" id="post-003">
+            
+            <a href="#post-001" class="parent-post-preview">
+                これは親の投稿の抜粋テキストです... クリックすると親（post-001）へ移動します。
+            </a>
+
+            <div class="post-header">
+                <img src="https://placehold.co/100" alt="Icon" class="user-avatar">
+                <div class="user-info">
+                    <span class="user-name">Gemini User</span>
+                    <span class="user-id">@gemini_fan</span>
+                </div>
+                <button class="follow-btn following">フォロー中</button>
+            </div>
+
+            <div class="post-body">
+                <p>ここが「自分への返信」の本文です。</p>
+                <p>上のグレーの枠をクリックしてみてください。スルスルっと上にスクロールして戻るはずです。</p>
+                
+                <div class="more-content" id="more-content-1">
+                    <p>隠されていた長文の続きです。デザインの一貫性を保ちつつ、新しい機能を追加しました。</p>
+                </div>
+                <button class="more-btn" onclick="toggleMore('more-content-1', this)">...もっと見る</button>
+            </div>
+        </article>
+
+        <div style="height: 500px;"></div>
+
+    </main>
+
+    <aside class="sticky-sidebar">
+        <h3>トレンド</h3>
+        <ul>
+            <li>#GitHubPages</li>
+            <li>#WebDesign</li>
+            <li>#GeminiHelp</li>
+        </ul>
+        <div style="margin-top: 20px; font-size: 0.85rem; color: #888;">
+            © 2025 My App
+        </div>
+    </aside>
+
 </div>
 
-<div id="pinned-container"></div>
-
-<div id="feed" class="feed"></div>
-
 <script>
-  // ★ここにあなたのハンドルネームを入れてください
-  const HANDLE = "katsuobushi-kawa.bsky.social"; 
-  const API_BASE = "https://public.api.bsky.app/xrpc";
-
-  // 要素の取得
-  const els = {
-    banner: document.getElementById('banner'),
-    avatar: document.getElementById('avatar'),
-    name: document.getElementById('display-name'),
-    handle: document.getElementById('handle'),
-    follow: document.getElementById('follow-link'),
-    pinned: document.getElementById('pinned-container'),
-    feed: document.getElementById('feed')
-  };
-
-  async function fetchProfile() {
-    try {
-      // プロフィール取得
-      const res = await fetch(`${API_BASE}/app.bsky.actor.getProfile?actor=${HANDLE}`);
-      const data = await res.json();
-
-      // UI反映
-      if (data.banner) els.banner.style.backgroundImage = `url(${data.banner})`;
-      els.avatar.src = data.avatar || '';
-      els.name.textContent = data.displayName || data.handle;
-      els.handle.textContent = `@${data.handle}`;
-      els.follow.href = `https://bsky.app/profile/${data.handle}`;
-
-      // ピン留めがあるか確認
-      if (data.pinnedPost) {
-        fetchPinnedPost(data.pinnedPost.uri);
-      } else {
-         // ピン留めがない場合、通常のフィードを取得（必要に応じて）
-         fetchAuthorFeed();
-      }
-
-    } catch (e) {
-      console.error(e);
-      els.name.textContent = "Error loading profile";
-    }
-  }
-
-  // ピン留め投稿の取得
-  async function fetchPinnedPost(uri) {
-    // at://did:plc:.../app.bsky.feed.post/12345 形式を分解
-    const parts = uri.split('/');
-    const repo = parts[2]; // did
-    const rkey = parts[4]; // postID
-
-    try {
-      const res = await fetch(`${API_BASE}/app.bsky.feed.getPostThread?uri=${uri}&depth=0`);
-      const data = await res.json();
-      
-      if(data.thread) {
-        const postElement = createPostElement(data.thread.post, true); // true = pinned
-        els.pinned.appendChild(postElement);
-      }
-      
-      // ピン留めの後に通常のフィードも読み込む
-      fetchAuthorFeed(uri); // ピン留めと同じ投稿を除外するためにURIを渡す
-    } catch(e) {
-      console.error("Pinned post error", e);
-      fetchAuthorFeed();
-    }
-  }
-
-  // 通常フィードの取得
-  async function fetchAuthorFeed(pinnedUri = null) {
-    try {
-      const res = await fetch(`${API_BASE}/app.bsky.feed.getAuthorFeed?actor=${HANDLE}&limit=5&filter=posts_no_replies`);
-      const data = await res.json();
-
-      data.feed.forEach(item => {
-        // ピン留めと同じ投稿は表示しない
-        if (pinnedUri && item.post.uri === pinnedUri) return;
-        
-        const postElement = createPostElement(item.post, false);
-        els.feed.appendChild(postElement);
-      });
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
-  // 投稿HTMLの作成
-  function createPostElement(post, isPinned) {
-    const record = post.record;
-    const author = post.author;
-    
-    // 投稿のリンク作成 (webアプリへのリンク)
-    const postParts = post.uri.split('/');
-    const postId = postParts[postParts.length - 1];
-    const postUrl = `https://bsky.app/profile/${author.handle}/post/${postId}`;
-
-    const div = document.createElement('div');
-    div.className = 'post';
-
-    // ピン留めラベル
-    let pinHtml = '';
-    if (isPinned) {
-      pinHtml = `<div class="pinned-label">📌 Pinned Post</div>`;
+    // Moreボタンの開閉ロジック
+    function toggleMore(contentId, btn) {
+        const content = document.getElementById(contentId);
+        content.classList.add('is-open');
+        btn.style.display = 'none'; // ボタンを消す
     }
 
-    // 引用（Embed Record）の処理
-    let quoteHtml = '';
-    if (post.embed && post.embed.$type === 'app.bsky.embed.record#view') {
-      const quote = post.embed.record;
-      // 引用元のURL生成
-      const qParts = quote.uri.split('/');
-      const qId = qParts[qParts.length - 1];
-      const qHandle = quote.author.handle; // APIのレスポンス構造による
-      const qUrl = `https://bsky.app/profile/${qHandle}/post/${qId}`;
+    // アンカーリンククリック時のハイライト演出
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const targetId = this.getAttribute('href').substring(1);
+            const targetElement = document.getElementById(targetId);
 
-      // 引用ボックス (クリックイベントを設定)
-      // data-href属性にURLを持たせ、JSで遷移させる
-      quoteHtml = `
-        <div class="quote-box" onclick="window.open('${qUrl}', '_blank')">
-          <div class="quote-author">
-            <img src="${quote.author.avatar}" alt="">
-            <span>${quote.author.displayName || quote.author.handle}</span>
-            <span class="quote-handle">@${quote.author.handle}</span>
-          </div>
-          <div class="post-content" style="margin-top:5px;">
-            ${quote.value.text || ''}
-          </div>
-        </div>
-      `;
-    }
+            if (targetElement) {
+                // スクロール実行
+                targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-    // HTML構築
-    div.innerHTML = `
-      ${pinHtml}
-      <div class="post-header">
-        <strong>${author.displayName || author.handle}</strong>
-        <span style="margin-left:5px; color:#666;">@${author.handle}</span>
-      </div>
-      <div class="post-content">
-        ${record.text}
-      </div>
-      ${quoteHtml}
-      <div style="margin-top:8px;">
-        <a href="${postUrl}" target="_blank" style="font-size:12px; color:#666;">View on Bluesky</a>
-      </div>
-    `;
-
-    return div;
-  }
-
-  // 実行
-  fetchProfile();
+                // 一瞬光らせる演出
+                targetElement.classList.add('highlight');
+                setTimeout(() => {
+                    targetElement.classList.remove('highlight');
+                }, 1000); // 1秒後に元の色に戻す
+            }
+        });
+    });
 </script>
 
 </body>
