@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Bluesky Feed (ver34.0)</title>
+<title>My Bluesky Feed (ver36.0)</title>
 <style>
     /* --------------------------------------------------
        基本設定
@@ -72,13 +72,13 @@
         margin-bottom: 10px; display: none;
     }
 
-    /* --- メディア表示エリア --- */
+    /* 画像エリア */
     .post-images { display: grid; gap: 2px; border-radius: 12px; overflow: hidden; margin-top: 12px; border: 1px solid #cfd9de; }
     .post-images img { width: 100%; height: auto; object-fit: cover; display: block; }
     .post-images[data-count="1"] { grid-template-columns: 1fr; }
     .post-images[data-count="2"] { grid-template-columns: 1fr 1fr; }
 
-    /* リンクカード (共通デザイン) */
+    /* リンクカード */
     .link-card {
         display: flex; text-decoration: none; color: inherit;
         border: 1px solid #cfd9de; border-radius: 12px; overflow: hidden;
@@ -87,7 +87,7 @@
     }
     .link-card:hover { background-color: #f7f9f9; }
     
-    /* 通常のOGP画像がある場合 (縦積み) */
+    /* 大きな画像がある場合 (YouTubeなど) */
     .link-card.has-large-image { display: block; }
     .link-card.has-large-image .link-card-img { width: 100%; height: 200px; object-fit: cover; display: block; border-bottom: 1px solid #cfd9de; }
     
@@ -168,7 +168,7 @@
                 const safeId = "post-" + post.uri.split('/').pop(); 
                 article.id = safeId;
 
-                // 1. 親投稿表示
+                // 1. 親投稿
                 let parentHtml = '';
                 if (reply && reply.parent && reply.parent.author.did === post.author.did) {
                     const parentId = "post-" + reply.parent.uri.split('/').pop();
@@ -180,25 +180,23 @@
                     `;
                 }
 
-                // 2. Facetsを使った本文リンク生成
+                // 2. 本文
                 const bodyText = applyFacets(post.record.text, post.record.facets);
-                
                 let bodyHtml = `<div class="post-body">${bodyText}</div>`;
                 let moreBtnHtml = '';
-                
                 if (post.record.text.length > 500) {
                     bodyHtml = `<div class="post-body text-truncated" id="body-${safeId}">${bodyText}</div>`;
                     moreBtnHtml = `<button class="read-more-btn" onclick="expandText('body-${safeId}', this)">...もっと見る</button>`;
                 }
 
-                // 3. メディア表示
+                // 3. メディア（既存のEmbed）
                 let mediaHtml = renderEmbed(post.embed);
 
-                // 4. ★追加機能★ 写真があってもURLがあれば強制的にカードを作る
-                // 既にEmbedで外部リンク(external)が表示されている場合は作らない
-                const hasExternalEmbed = post.embed && post.embed.$type === 'app.bsky.embed.external';
+                // 4. 重複防止チェック
+                const alreadyHasExternalCard = isExternalEmbedPresent(post.embed);
                 
-                if (!hasExternalEmbed && post.record.facets) {
+                // Embedカードがない場合のみ、Facetsからカードを生成する
+                if (!alreadyHasExternalCard && post.record.facets) {
                     const extraCard = createExtraLinkCard(post.record.facets);
                     if (extraCard) {
                         mediaHtml += extraCard;
@@ -247,6 +245,16 @@
 
     // --- 機能関数 ---
 
+    // 外部リンクカードが既に存在するかチェック
+    function isExternalEmbedPresent(embed) {
+        if (!embed) return false;
+        if (embed.$type === 'app.bsky.embed.external') return true;
+        if (embed.$type === 'app.bsky.embed.recordWithMedia') {
+            return isExternalEmbedPresent(embed.media);
+        }
+        return false;
+    }
+
     function applyFacets(text, facets) {
         if (!text) return "";
         if (!facets || facets.length === 0) return escapeHtml(text).replace(/\n/g, '<br>');
@@ -278,10 +286,9 @@
         return html.replace(/\n/g, '<br>');
     }
 
-    // ★修正版：どんなリンクでもカード化する関数★
+    // ★修正版：カード生成ロジック★
     function createExtraLinkCard(facets) {
         let html = '';
-        // 最初の1つのリンクだけをカード化する（複数はうっとうしいので）
         let foundLink = false;
 
         for (const facet of facets) {
@@ -293,8 +300,8 @@
                 const url = feat.uri;
                 const hostname = new URL(url).hostname;
                 
-                // YouTubeの特別扱い（サムネが取れるため）
-                const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/);
+                // ★YouTube判定の強化 (Live / Shorts / youtu.be に対応)
+                const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|live\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
                 
                 if (ytMatch) {
                     const vid = ytMatch[1];
@@ -309,10 +316,8 @@
                         </a>
                     `;
                 } else {
-                    // ★楽天などその他のリンク（Faviconを使ってカード化）★
-                    // 画像の代わりにサイトのアイコンを左側に表示
+                    // その他のリンク (Favicon利用)
                     const faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
-                    
                     html += `
                         <a href="${url}" target="_blank" rel="noopener" class="link-card">
                             <img src="${faviconUrl}" class="link-card-icon" alt="">
@@ -349,7 +354,7 @@
             html += `</div>`;
             return html;
         }
-        // 通常の外部リンクカード
+        // 外部リンク
         if (embed.external) {
             const ext = embed.external;
             return `
