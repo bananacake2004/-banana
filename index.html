@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Bluesky Feed (Infinite)</title>
+<title>My Bluesky Feed (ver29.0)</title>
 <style>
     /* --------------------------------------------------
        基本設定
@@ -14,24 +14,26 @@
         color: #0f1419; line-height: 1.6;
         background-color: #f9f9f9; scroll-behavior: smooth;
     }
+
     .container {
-        display: flex; flex-wrap: wrap; max-width: 1200px;
-        margin: 0 auto; padding: 20px; gap: 20px; position: relative;
-    }
-    .main-content {
-        flex: 1; min-width: 0; max-width: 600px; margin: 0 auto;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
     }
 
-    /* --- カードデザイン --- */
+    /* カード本体 */
     .card {
-        background: #fff; border: 1px solid #cfd9de; border-radius: 16px;
-        padding: 16px; margin-bottom: 24px;
+        background: #fff;
+        border: 1px solid #cfd9de;
+        border-radius: 16px;
+        padding: 16px;
+        margin-bottom: 24px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.02);
         transition: background-color 1s ease;
     }
     .card.highlight { background-color: #fff8c5; transition: none; }
 
-    /* 親投稿（グレー枠） */
+    /* 親投稿（自分への返信）のグレー枠 */
     .parent-post-preview {
         display: block; text-decoration: none;
         background-color: #f7f9f9; border: 1px solid #eff3f4;
@@ -44,78 +46,106 @@
         font-size: 0.75rem; color: #536471; margin-bottom: 4px; font-weight: bold;
     }
 
-    /* ヘッダー・本文・画像 */
-    .post-header { display: flex; align-items: center; margin-bottom: 12px; }
-    .user-avatar { width: 48px; height: 48px; border-radius: 50%; margin-right: 12px; object-fit: cover; background: #eee; }
-    .user-info { flex: 1; line-height: 1.2; }
-    .user-name { font-weight: bold; font-size: 1rem; display: block; }
+    /* ヘッダー */
+    .post-header { display: flex; align-items: flex-start; margin-bottom: 8px; }
+    .user-avatar { width: 48px; height: 48px; border-radius: 50%; margin-right: 12px; object-fit: cover; background: #eee; flex-shrink: 0; }
+    .user-info { flex: 1; line-height: 1.2; padding-top: 4px; }
+    .user-name { font-weight: bold; font-size: 1rem; display: block; color: #0f1419; }
     .user-id { color: #536471; font-size: 0.9rem; }
     .follow-btn {
         background-color: #0f1419; color: #fff; border: none; border-radius: 9999px;
-        padding: 6px 16px; font-weight: bold; font-size: 0.9rem; cursor: pointer; text-decoration: none;
+        padding: 6px 16px; font-weight: bold; font-size: 0.85rem; cursor: pointer; text-decoration: none;
+        flex-shrink: 0; margin-left: 10px;
     }
-    .post-body { font-size: 1rem; margin-bottom: 12px; white-space: pre-wrap; word-break: break-word; }
-    .post-images { display: grid; gap: 4px; border-radius: 12px; overflow: hidden; margin-top: 10px; }
-    .post-images img { width: 100%; height: auto; display: block; }
 
-    /* 読み込みボタン・インジケーター */
+    /* 本文 */
+    .post-body { 
+        font-size: 1rem; margin-bottom: 12px; 
+        white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
+    }
+    .post-body a { color: #1d9bf0; text-decoration: none; }
+    .post-body a:hover { text-decoration: underline; }
+
+    /* 長文省略（More）機能 */
+    .text-truncated {
+        display: -webkit-box;
+        -webkit-line-clamp: 5; /* 5行まで表示 */
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .text-expanded { display: block; }
+    
+    .read-more-btn {
+        background: none; border: none; padding: 0;
+        color: #1d9bf0; cursor: pointer; font-size: 0.9rem;
+        margin-bottom: 10px; display: none; /* JSで制御 */
+    }
+    .read-more-btn:hover { text-decoration: underline; }
+
+    /* --- メディア表示 (画像・カード・引用) --- */
+    
+    /* 画像 */
+    .post-images { display: grid; gap: 2px; border-radius: 12px; overflow: hidden; margin-top: 12px; border: 1px solid #cfd9de; }
+    .post-images img { width: 100%; height: auto; object-fit: cover; display: block; }
+    /* 画像枚数によるレイアウト調整（簡易） */
+    .post-images[data-count="1"] { grid-template-columns: 1fr; }
+    .post-images[data-count="2"] { grid-template-columns: 1fr 1fr; }
+    .post-images[data-count="3"] { grid-template-columns: 1fr 1fr; }
+    .post-images[data-count="4"] { grid-template-columns: 1fr 1fr; }
+
+    /* リンクカード (External) */
+    .link-card {
+        display: block; text-decoration: none; color: inherit;
+        border: 1px solid #cfd9de; border-radius: 12px; overflow: hidden;
+        margin-top: 12px; transition: background 0.2s;
+    }
+    .link-card:hover { background-color: #f7f9f9; }
+    .link-card-img {
+        width: 100%; height: 200px; object-fit: cover; display: block; border-bottom: 1px solid #cfd9de;
+    }
+    .link-card-content { padding: 12px; }
+    .link-card-title { font-weight: bold; font-size: 1rem; margin-bottom: 4px; line-height: 1.4; }
+    .link-card-desc { font-size: 0.9rem; color: #536471; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .link-card-host { font-size: 0.85rem; color: #888; }
+
+    /* 引用カード (Quote) */
+    .quote-card {
+        border: 1px solid #cfd9de; border-radius: 12px; padding: 12px;
+        margin-top: 12px; background: #fff; cursor: pointer; transition: background 0.2s;
+    }
+    .quote-card:hover { background-color: #f7f9f9; }
+    .quote-user { display: flex; align-items: center; margin-bottom: 8px; font-size: 0.9rem; font-weight: bold; }
+    .quote-user img { width: 24px; height: 24px; border-radius: 50%; margin-right: 8px; }
+    .quote-body { font-size: 0.95rem; white-space: pre-wrap; word-break: break-word; }
+
+    /* ページネーションボタン */
     #loading-indicator { text-align: center; padding: 20px; color: #666; display: none; }
     .load-more-btn {
-        display: block; width: 100%; padding: 15px; margin-top: 20px;
+        display: block; width: 100%; padding: 15px; margin-top: 30px; margin-bottom: 60px;
         background: #1d9bf0; color: white; border: none; border-radius: 30px;
         font-size: 1rem; font-weight: bold; cursor: pointer; text-align: center;
     }
     .load-more-btn:hover { background: #1a8cd8; }
-    .load-more-btn:disabled { background: #ccc; cursor: not-allowed; }
-
-    /* サイドバー */
-    .sticky-sidebar {
-        width: 300px; position: sticky; top: 20px; height: fit-content;
-        background: #fff; padding: 20px; border-radius: 16px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-    }
-    @media (max-width: 768px) {
-        .container { flex-direction: column; }
-        .sticky-sidebar { width: 100%; position: static; }
-        .main-content { max-width: 100%; }
-    }
 </style>
 </head>
 <body>
 
 <div class="container">
-    <main class="main-content">
-        <div id="feed-container">
-            </div>
-        
-        <div id="loading-indicator">読み込み中...</div>
-        <button id="load-more-btn" class="load-more-btn" style="display:none;">もっと見る</button>
-    </main>
-
-    <aside class="sticky-sidebar">
-        <h3>@katsuobushi-kawa</h3>
-        <p>Blueskyの過去ログビューア</p>
-        <ul>
-            <li><a href="https://bsky.app/profile/katsuobushi-kawa.bsky.social" target="_blank">Bluesky公式へ</a></li>
-        </ul>
-    </aside>
+    <div id="feed-container"></div>
+    <div id="loading-indicator">読み込み中...</div>
+    <button id="load-more-btn" class="load-more-btn" style="display:none;">過去の投稿を読み込む</button>
 </div>
 
 <script>
     const ACTOR = "katsuobushi-kawa.bsky.social";
-    // 1回に取得する件数（最大100まで設定可能）
     const LIMIT = 30; 
-    let currentCursor = null; // 次のページを取得するためのキー
+    let currentCursor = null; 
     let isFetching = false;
 
     document.addEventListener('DOMContentLoaded', () => {
-        fetchPosts(); // 初回読み込み
-        
-        // 「もっと見る」ボタンの設定
+        fetchPosts(); 
         document.getElementById('load-more-btn').addEventListener('click', () => {
-            if (!isFetching && currentCursor) {
-                fetchPosts(currentCursor);
-            }
+            if (!isFetching && currentCursor) fetchPosts(currentCursor);
         });
     });
 
@@ -130,33 +160,29 @@
         loadingIndicator.style.display = 'block';
         loadMoreBtn.style.display = 'none';
 
-        // URL作成（カーソルがある場合はパラメータに追加）
         let url = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${ACTOR}&filter=posts_with_replies&limit=${LIMIT}`;
-        if (cursor) {
-            url += `&cursor=${cursor}`;
-        }
+        if (cursor) url += `&cursor=${cursor}`;
 
         try {
             const response = await fetch(url);
-            if (!response.ok) throw new Error("API取得エラー");
+            if (!response.ok) throw new Error("APIエラー");
             const data = await response.json();
 
-            // 投稿生成ループ
             data.feed.forEach(item => {
                 const post = item.post;
                 const reply = item.reply;
                 const article = document.createElement('article');
                 article.className = 'card';
                 
-                // ID生成
+                // ID付与
                 const safeId = "post-" + post.uri.split('/').pop(); 
                 article.id = safeId;
 
-                // 自分への返信判定
+                // --- 1. 親投稿（自分への返信）表示 ---
                 let parentHtml = '';
                 if (reply && reply.parent && reply.parent.author.did === post.author.did) {
                     const parentId = "post-" + reply.parent.uri.split('/').pop();
-                    const parentText = reply.parent.record.text || "画像/メディア";
+                    const parentText = reply.parent.record.text || "メディア投稿";
                     parentHtml = `
                         <a href="#${parentId}" class="parent-post-preview" onclick="handleJump(event, '${parentId}', '${reply.parent.uri}')">
                             ${escapeHtml(parentText).substring(0, 60)}...
@@ -164,17 +190,24 @@
                     `;
                 }
 
-                // 画像処理
-                let imagesHtml = '';
-                if (post.embed && post.embed.images) {
-                    imagesHtml = `<div class="post-images">`;
-                    post.embed.images.forEach(img => {
-                        imagesHtml += `<img src="${img.thumb}" alt="${img.alt || ''}">`;
-                    });
-                    imagesHtml += `</div>`;
+                // --- 2. リンク化と本文処理 ---
+                // テキスト内のURLをリンクに変換
+                const bodyText = linkify(post.record.text);
+                
+                // 長文判定（簡易的に文字数で判定し、JSでクラス制御）
+                let bodyHtml = `<div class="post-body">${bodyText}</div>`;
+                let moreBtnHtml = '';
+                
+                // 300文字以上なら折りたたむ（ver24.0のMoreボタン機能を再現）
+                if (post.record.text.length > 300) {
+                    bodyHtml = `<div class="post-body text-truncated" id="body-${safeId}">${bodyText}</div>`;
+                    moreBtnHtml = `<button class="read-more-btn" onclick="expandText('body-${safeId}', this)">...もっと見る</button>`;
                 }
 
-                // カードHTML
+                // --- 3. メディア（画像・カード・引用） ---
+                const mediaHtml = renderEmbed(post.embed);
+
+                // --- HTML組み立て ---
                 article.innerHTML = `
                     ${parentHtml}
                     <div class="post-header">
@@ -183,45 +216,115 @@
                             <span class="user-name">${escapeHtml(post.author.displayName || post.author.handle)}</span>
                             <span class="user-id">@${post.author.handle}</span>
                         </div>
-                        <a href="https://bsky.app/profile/${post.author.handle}" target="_blank" class="follow-btn">フォロー</a>
+                        <a href="https://bsky.app/profile/${post.author.handle}" target="_blank" class="follow-btn">Bluesky</a>
                     </div>
-                    <div class="post-body">
-                        ${formatText(post.record.text)}
-                        ${imagesHtml}
-                    </div>
-                    <div style="font-size:0.8rem; color:#888;">
+                    ${bodyHtml}
+                    ${moreBtnHtml}
+                    ${mediaHtml}
+                    <div style="font-size:0.85rem; color:#888; margin-top:8px;">
                         ${new Date(post.record.createdAt).toLocaleString()}
                     </div>
                 `;
                 container.appendChild(article);
+                
+                // もっと見るボタンを表示（CSSで初期非表示にしているため）
+                if(moreBtnHtml) {
+                    article.querySelector('.read-more-btn').style.display = 'inline-block';
+                }
             });
 
-            // 次のページのカーソルを保存
             if (data.cursor) {
                 currentCursor = data.cursor;
-                loadMoreBtn.style.display = 'block'; // 次があるならボタン表示
+                loadMoreBtn.style.display = 'block';
             } else {
                 currentCursor = null;
-                // これ以上ない場合の表示（任意）
             }
 
         } catch (error) {
             console.error(error);
-            container.insertAdjacentHTML('beforeend', `<p style="color:red;">読み込みエラー: ${error.message}</p>`);
+            container.insertAdjacentHTML('beforeend', `<p style="color:red; text-align:center;">エラー: ${error.message}</p>`);
         } finally {
             isFetching = false;
             loadingIndicator.style.display = 'none';
         }
     }
 
-    // --- ユーティリティ関数 ---
+    // --- 機能関数群 ---
+
+    // テキスト折りたたみ解除
+    function expandText(elementId, btn) {
+        document.getElementById(elementId).classList.remove('text-truncated');
+        document.getElementById(elementId).classList.add('text-expanded');
+        btn.style.display = 'none';
+    }
+
+    // リンク化（URLをaタグに変換）
+    function linkify(text) {
+        if (!text) return "";
+        let escaped = escapeHtml(text);
+        // URL
+        escaped = escaped.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+        // 改行
+        return escaped.replace(/\n/g, '<br>');
+    }
+
+    // メディア描画（画像・外部リンク・引用）
+    function renderEmbed(embed) {
+        if (!embed) return "";
+
+        // 1. 画像 (images)
+        if (embed.images) {
+            let count = embed.images.length;
+            let html = `<div class="post-images" data-count="${count}">`;
+            embed.images.forEach(img => {
+                html += `<img src="${img.thumb}" alt="${escapeHtml(img.alt || '')}">`;
+            });
+            html += `</div>`;
+            return html;
+        }
+
+        // 2. 外部リンクカード (external)
+        if (embed.external) {
+            const ext = embed.external;
+            return `
+                <a href="${ext.uri}" target="_blank" rel="noopener" class="link-card">
+                    ${ext.thumb ? `<img src="${ext.thumb}" class="link-card-img">` : ''}
+                    <div class="link-card-content">
+                        <div class="link-card-title">${escapeHtml(ext.title || 'No Title')}</div>
+                        <div class="link-card-desc">${escapeHtml(ext.description || '')}</div>
+                        <div class="link-card-host">${new URL(ext.uri).hostname}</div>
+                    </div>
+                </a>
+            `;
+        }
+
+        // 3. 引用リポスト (record)
+        if (embed.record && embed.record.value) { // record.value がある場合
+             const rec = embed.record.value;
+             const author = embed.record.author || { handle: 'unknown', avatar: '' };
+             return `
+                <div class="quote-card">
+                    <div class="quote-user">
+                        <img src="${author.avatar || 'https://via.placeholder.com/20'}" alt="">
+                        <span>${escapeHtml(author.displayName || author.handle)}</span>
+                    </div>
+                    <div class="quote-body">${escapeHtml(rec.text || '')}</div>
+                </div>
+             `;
+        }
+        
+        // 4. 画像付き引用など (recordWithMedia)
+        if (embed.$type === 'app.bsky.embed.recordWithMedia') {
+            // メディアと引用の両方を表示
+            return renderEmbed(embed.media) + renderEmbed(embed.record);
+        }
+
+        return "";
+    }
+
     function escapeHtml(text) {
         if (!text) return "";
         return text.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]);
-    }
-
-    function formatText(text) {
-        return escapeHtml(text).replace(/\n/g, '<br>');
     }
 
     function handleJump(e, targetId, bskyUri) {
